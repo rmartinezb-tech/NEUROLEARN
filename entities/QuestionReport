@@ -1,0 +1,33 @@
+{
+  "name": "QuestionReport",
+  "type": "object",
+  "properties": {
+    "question_id": {
+      "type": "string"
+    },
+    "reporter_id": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "custom_reason": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "resolved"
+      ]
+    },
+    "resolved_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "question_id",
+    "reporter_id",
+    "reason"
+  ]
+}
