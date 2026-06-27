@@ -1,0 +1,163 @@
+{
+  "name": "UserProfile",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "avatar_emoji": {
+      "type": "string"
+    },
+    "onboarding_complete": {
+      "type": "boolean"
+    },
+    "xp": {
+      "type": "number"
+    },
+    "level": {
+      "type": "number"
+    },
+    "streak_days": {
+      "type": "number"
+    },
+    "last_study_date": {
+      "type": "string"
+    },
+    "sabers": {
+      "type": "number"
+    },
+    "league": {
+      "type": "string",
+      "enum": [
+        "bronze",
+        "silver",
+        "gold",
+        "platinum",
+        "diamond",
+        "master"
+      ]
+    },
+    "evocation_points": {
+      "type": "number"
+    },
+    "elaboration_points": {
+      "type": "number"
+    },
+    "neuro_correct_count": {
+      "type": "number"
+    },
+    "health_correct_count": {
+      "type": "number"
+    },
+    "biomed_correct_count": {
+      "type": "number"
+    },
+    "development_correct_count": {
+      "type": "number"
+    },
+    "clinical_correct_count": {
+      "type": "number"
+    },
+    "total_sessions": {
+      "type": "number"
+    },
+    "total_questions_answered": {
+      "type": "number"
+    },
+    "total_correct": {
+      "type": "number"
+    },
+    "interleaved_sessions": {
+      "type": "number"
+    },
+    "unique_study_days": {
+      "type": "number"
+    },
+    "total_study_hours": {
+      "type": "number"
+    },
+    "duels_won": {
+      "type": "number"
+    },
+    "duel_win_streak": {
+      "type": "number"
+    },
+    "duel_unbeaten_streak": {
+      "type": "number"
+    },
+    "tournaments_won": {
+      "type": "number"
+    },
+    "elaboration_posts": {
+      "type": "number"
+    },
+    "elaboration_votes_received": {
+      "type": "number"
+    },
+    "difficulty_rated_count": {
+      "type": "number"
+    },
+    "achievements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "easter_eggs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "weekly_goals": {
+      "type": "object",
+      "properties": {
+        "sessions_target": {
+          "type": "number"
+        },
+        "questions_target": {
+          "type": "number"
+        },
+        "minutes_target": {
+          "type": "number"
+        }
+      }
+    },
+    "theme": {
+      "type": "string"
+    },
+    "sound_enabled": {
+      "type": "boolean"
+    },
+    "willie_enabled": {
+      "type": "boolean"
+    },
+    "difficulty_ratings": {
+      "type": "object"
+    },
+    "dashboard_layout": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "is_online": {
+      "type": "boolean"
+    },
+    "last_active": {
+      "type": "string"
+    },
+    "scroll_never": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}
