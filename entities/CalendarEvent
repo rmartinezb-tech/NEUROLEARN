@@ -1,0 +1,41 @@
+{
+  "name": "CalendarEvent",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "day": {
+      "type": "number"
+    },
+    "hour": {
+      "type": "number"
+    },
+    "duration": {
+      "type": "number"
+    },
+    "type": {
+      "type": "string"
+    },
+    "isCritical": {
+      "type": "boolean"
+    },
+    "view_type": {
+      "type": "string",
+      "enum": [
+        "individual",
+        "group"
+      ]
+    }
+  },
+  "required": [
+    "title",
+    "user_id"
+  ]
+}
