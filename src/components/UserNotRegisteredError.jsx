@@ -27,3 +27,5 @@ const UserNotRegisteredError = () => {
     </div>
   );
 };
+
+export default UserNotRegisteredError;
