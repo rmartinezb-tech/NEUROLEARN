@@ -1,0 +1,40 @@
+{
+  "name": "Scroll",
+  "type": "object",
+  "properties": {
+    "sender_id": {
+      "type": "string"
+    },
+    "receiver_id": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "evaluated",
+        "ignored"
+      ]
+    },
+    "stars_given": {
+      "type": "number"
+    },
+    "sender_milestone": {
+      "type": "number"
+    },
+    "never_send": {
+      "type": "boolean"
+    },
+    "skip_until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "sender_id",
+    "receiver_id",
+    "content"
+  ]
+}
