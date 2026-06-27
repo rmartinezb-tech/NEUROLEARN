@@ -1,0 +1,129 @@
+{
+  "name": "Question",
+  "type": "object",
+  "properties": {
+    "statement": {
+      "type": "string",
+      "description": "Enunciado de la pregunta"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "multiple_choice",
+        "true_false",
+        "fill_blank",
+        "order_sequence",
+        "matching",
+        "development",
+        "clinical_case",
+        "flashcard"
+      ],
+      "description": "Tipo de pregunta"
+    },
+    "subject": {
+      "type": "string",
+      "enum": [
+        "Neurociencias",
+        "Cuidados de la Salud",
+        "Ciencias Biom\u00e9dicas",
+        "Otras"
+      ],
+      "description": "Materia"
+    },
+    "custom_subject": {
+      "type": "string",
+      "description": "Materia personalizada si es Otras"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Opciones de respuesta"
+    },
+    "correct_answer": {
+      "type": "string",
+      "description": "Respuesta correcta"
+    },
+    "correct_index": {
+      "type": "number",
+      "description": "\u00cdndice de la respuesta correcta"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Explicaci\u00f3n de la respuesta"
+    },
+    "hints": {
+      "type": "string",
+      "description": "Pistas"
+    },
+    "difficulty_suggested": {
+      "type": "number",
+      "description": "Dificultad sugerida 1-5"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "URL de imagen adjunta"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Etiquetas"
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "ai",
+        "imported"
+      ],
+      "description": "Origen"
+    },
+    "matching_pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "string"
+          },
+          "right": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Pares para matching"
+    },
+    "sequence_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Orden correcto para secuencias"
+    },
+    "flashcard_back": {
+      "type": "string",
+      "description": "Reverso de flashcard"
+    },
+    "is_reported": {
+      "type": "boolean",
+      "description": "Tiene reportes activos"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft",
+        "reported"
+      ],
+      "description": "Estado"
+    }
+  },
+  "required": [
+    "statement",
+    "type",
+    "subject"
+  ]
+}
