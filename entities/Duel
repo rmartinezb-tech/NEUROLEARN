@@ -1,0 +1,62 @@
+{
+  "name": "Duel",
+  "type": "object",
+  "properties": {
+    "challenger_id": {
+      "type": "string"
+    },
+    "challenger_name": {
+      "type": "string"
+    },
+    "opponent_id": {
+      "type": "string"
+    },
+    "opponent_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "in_progress",
+        "completed",
+        "rejected"
+      ]
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "challenger_score": {
+      "type": "number"
+    },
+    "opponent_score": {
+      "type": "number"
+    },
+    "challenger_accuracy": {
+      "type": "number"
+    },
+    "opponent_accuracy": {
+      "type": "number"
+    },
+    "challenger_avg_time": {
+      "type": "number"
+    },
+    "opponent_avg_time": {
+      "type": "number"
+    },
+    "winner_id": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "challenger_id",
+    "opponent_id"
+  ]
+}
