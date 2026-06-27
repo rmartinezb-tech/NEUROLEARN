@@ -1,0 +1,95 @@
+{
+  "name": "StudySession",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "ID del usuario"
+    },
+    "session_type": {
+      "type": "string",
+      "enum": [
+        "personalized",
+        "selective",
+        "express",
+        "duel",
+        "tournament"
+      ],
+      "description": "Tipo de sesi\u00f3n"
+    },
+    "questions_total": {
+      "type": "number"
+    },
+    "questions_correct": {
+      "type": "number"
+    },
+    "questions_incorrect": {
+      "type": "number"
+    },
+    "accuracy": {
+      "type": "number",
+      "description": "Porcentaje de precisi\u00f3n"
+    },
+    "xp_earned": {
+      "type": "number"
+    },
+    "duration_minutes": {
+      "type": "number"
+    },
+    "subjects_covered": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "question_types_covered": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "is_interleaved": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "in_progress",
+        "completed",
+        "paused",
+        "abandoned"
+      ]
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "answers_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "answered_correctly": {
+            "type": "boolean"
+          },
+          "time_seconds": {
+            "type": "number"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "reflection_note": {
+      "type": "string",
+      "description": "Diario de reflexi\u00f3n"
+    }
+  },
+  "required": [
+    "user_id",
+    "session_type"
+  ]
+}
