@@ -1,0 +1,32 @@
+{
+  "name": "StudyDiary",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "emotion": {
+      "type": "string"
+    },
+    "emotion_emoji": {
+      "type": "string"
+    },
+    "cog_load": {
+      "type": "number"
+    },
+    "note": {
+      "type": "string"
+    },
+    "session_date": {
+      "type": "string"
+    },
+    "session_type": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "emotion",
+    "session_date"
+  ]
+}
