@@ -1,0 +1,61 @@
+{
+  "name": "Tournament",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registration",
+        "in_progress",
+        "completed"
+      ]
+    },
+    "players": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "accuracy": {
+            "type": "number"
+          },
+          "avg_time": {
+            "type": "number"
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "min_questions": {
+      "type": "number"
+    },
+    "results_published": {
+      "type": "boolean"
+    },
+    "completed_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
