@@ -1,0 +1,39 @@
+{
+  "name": "Suggestion",
+  "type": "object",
+  "properties": {
+    "sender_id": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "sender_avatar": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "reply": {
+      "type": "string"
+    },
+    "replied_by": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "replied",
+        "resolved"
+      ]
+    },
+    "is_private": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "sender_id",
+    "message"
+  ]
+}
