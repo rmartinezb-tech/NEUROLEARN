@@ -52,16 +52,6 @@ export default function SignIn() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 shadow-lg">
-          <Button onClick={handleGoogle} variant="outline" className="w-full mb-4 py-5 rounded-xl" disabled={loading}>
-            <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5 mr-2" />
-            Continuar con Google
-          </Button>
-
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground">o con email</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
