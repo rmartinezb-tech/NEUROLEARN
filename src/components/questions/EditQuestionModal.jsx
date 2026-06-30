@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, Save, ArrowUp, ArrowDown } from 'lucide-react';
+import { COGNITIVE_SKILLS } from '../study/SessionConfigHelpers';
 import { toast } from "sonner";
 
 export default function EditQuestionModal({ question, onClose, onUpdated }) {
@@ -85,6 +86,16 @@ export default function EditQuestionModal({ question, onClose, onUpdated }) {
                   <SelectItem value="Cuidados de la Salud">Cuidados de la Salud</SelectItem>
                   <SelectItem value="Ciencias Biomédicas">Ciencias Biomédicas</SelectItem>
                   <SelectItem value="Otras">Otras</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <Label>Habilidad cognitiva <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+              <Select value={form.cognitive_skill || ''} onValueChange={v => update('cognitive_skill', v === '__none__' ? '' : v)}>
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="Sin clasificar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin clasificar</SelectItem>
+                  {COGNITIVE_SKILLS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

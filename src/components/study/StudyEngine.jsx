@@ -37,7 +37,6 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
   const [attemptKey, setAttemptKey] = useState(0);
   const [isCorrect, setIsCorrect] = useState(null);
   const [confidence, setConfidence] = useState(0);
-  const [dismissFatigue, setDismissFatigue] = useState(false);
 
   // ---- Block/Cycle state ----
   const [block, setBlock] = useState(1);
@@ -50,7 +49,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
   // ---- Stats ----
   const [stats, setStats] = useState({ correct: 0, incorrect: 0, total: 0, xp: 0, startTime: Date.now(), answers: [], responseTimes: [] });
   const [muted, setMuted] = useState(false);
-  const [fatigueAlert, setFatigueAlert] = useState(false);
+  const [fatigueModal, setFatigueModal] = useState(false);
   const lastAnswerTimeRef = useRef(Date.now());
   const timerRef = useRef(null);
   const breakTimerRef = useRef(null);
@@ -137,7 +136,10 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
       const recent = [...prev.answers, { question_id: currentQ.id, answered_correctly: correct, time_seconds: responseTime, confidence }].slice(-10);
       const recentErrors = recent.filter(a => !a.answered_correctly).length;
       const avgTime = newTimes.reduce((a, b) => a + b, 0) / (newTimes.length || 1);
-      if (newTimes.length >= 8 && avgTime > 25 && recentErrors >= 5) setFatigueAlert(true);
+      if (newTimes.length >= 8 && avgTime > 25 && recentErrors >= 5) {
+        setFatigueModal(true);
+        setIsPaused(true);
+      }
       return {
         ...prev,
         correct: prev.correct + (correct ? 1 : 0),
@@ -207,7 +209,6 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     setAttemptKey(k => k + 1);
     setIsCorrect(null);
     setConfidence(0);
-    setFatigueAlert(false);
 
     if (nextQueue.length === 0) {
       // Cycle complete — all questions graduated
@@ -342,22 +343,34 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
         </div>
       </div>
 
-      {/* Paused overlay */}
-      {isPaused && (
+      {/* Paused overlay (manual pause, no fatigue) */}
+      {isPaused && !fatigueModal && (
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-center space-y-2">
           <p className="font-semibold">⏸ Sesión en pausa — el tiempo se ha detenido</p>
           <Button size="sm" onClick={() => setIsPaused(false)}><Play className="mr-2 h-3 w-3" /> Reanudar</Button>
         </div>
       )}
 
-      {/* Fatigue alert */}
-      {fatigueAlert && !dismissFatigue && (
-        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between">
-          <p className="text-sm">🥱 Se detectó fatiga. ¿Quieres tomar una pausa?</p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setIsPaused(true)}>Pausar</Button>
-            <Button size="sm" variant="ghost" onClick={() => setDismissFatigue(true)}>Ignorar</Button>
-          </div>
+      {/* Fatigue modal — full overlay */}
+      {fatigueModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-border rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl space-y-5">
+            <div className="text-6xl">🥱</div>
+            <h3 className="text-xl font-bold">El sistema detecta fatiga</h3>
+            <p className="text-sm text-muted-foreground">
+              Tus tiempos de respuesta aumentaron y tuviste varios errores seguidos. ¿Querés tomarte una pausa para descansar?
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => { setFatigueModal(false); setIsPaused(false); }} className="w-full gap-2 py-4">
+                <Play className="h-4 w-4" /> Reanudar estudio
+              </Button>
+              <Button variant="outline" onClick={() => onBack && onBack()} className="w-full gap-2 py-4 text-muted-foreground">
+                Salir sin guardar
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Los resultados solo se guardan al completar la sesión.</p>
+          </motion.div>
         </div>
       )}
 

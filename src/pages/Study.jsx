@@ -2,20 +2,22 @@ import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { motion } from 'framer-motion';
-import { BookOpen, Shuffle, ListChecks, Zap, Star, ArrowRight } from 'lucide-react';
+import { BookOpen, Shuffle, ListChecks, Palette, Star, Brain, ArrowRight } from 'lucide-react';
 import WellnessChecklist from '../components/study/WellnessChecklist';
 import SingleSubjectSession from '../components/study/SingleSubjectSession';
 import PersonalizedSession from '../components/study/PersonalizedSession';
 import SelectiveSession from '../components/study/SelectiveSession';
-import ExpressMode from '../components/study/ExpressMode';
+import FlashcardCustomSession from '../components/study/FlashcardCustomSession';
 import DifficultySession from '../components/study/DifficultySession';
+import CognitiveSkillSession from '../components/study/CognitiveSkillSession';
 
 const modes = [
-  { id: 'single', icon: BookOpen, emoji: '🎯', title: 'Sesión de Materia Única', desc: 'Estudia una sola materia configurando ciclos, bloques, dificultad y tiempo.', color: 'border-green-500/30 hover:border-green-500' },
+  { id: 'single', icon: BookOpen, emoji: '🎯', title: 'Sesión de Materia Única', desc: 'Estudia una sola materia configurando ciclos, bloques y tiempo.', color: 'border-green-500/30 hover:border-green-500' },
   { id: 'personalized', icon: Shuffle, emoji: '🔀', title: 'Sesión Personalizada (Entrelazada)', desc: 'Mezcla 2 materias con repetición espaciada, ciclos y bloques configurables.', color: 'border-primary/30 hover:border-primary' },
   { id: 'selective', icon: ListChecks, emoji: '✅', title: 'Sesión Selectiva', desc: 'Elige exactamente qué preguntas quieres trabajar desde el banco.', color: 'border-purple-500/30 hover:border-purple-500' },
   { id: 'difficulty', icon: Star, emoji: '⭐', title: 'Sesión por Dificultad', desc: 'Practica preguntas según tu clasificación personal de dificultad (1-5 estrellas).', color: 'border-yellow-500/30 hover:border-yellow-500' },
-  { id: 'express', icon: Zap, emoji: '⚡', title: 'Modo Express', desc: 'Repaso rápido de flashcards configurable por cantidad y materia.', color: 'border-orange-500/30 hover:border-orange-500' },
+  { id: 'cognitive', icon: Brain, emoji: '🧠', title: 'Sesión de Habilidades Cognitivas', desc: 'Filtra preguntas por habilidad cognitiva: Análisis, Síntesis, Aplicación y más.', color: 'border-teal-500/30 hover:border-teal-500' },
+  { id: 'flashcard_custom', icon: Palette, emoji: '🎨', title: 'Flashcards con Personalización Visual', desc: 'Seleccioná hasta 5 flashcards, personalizá sus colores y estudiá con tu estilo.', color: 'border-pink-500/30 hover:border-pink-500' },
 ];
 
 export default function Study() {
@@ -29,9 +31,10 @@ export default function Study() {
 
   if (selectedMode === 'personalized') return <PersonalizedSession profile={profile} onBack={back} />;
   if (selectedMode === 'selective') return <SelectiveSession profile={profile} onBack={back} />;
-  if (selectedMode === 'express') return <ExpressMode profile={profile} onBack={back} />;
+  if (selectedMode === 'flashcard_custom') return <FlashcardCustomSession profile={profile} onBack={back} />;
   if (selectedMode === 'single') return <SingleSubjectSession profile={profile} onBack={back} />;
   if (selectedMode === 'difficulty') return <DifficultySession profile={profile} onBack={back} />;
+  if (selectedMode === 'cognitive') return <CognitiveSkillSession profile={profile} onBack={back} />;
 
   return (
     <div className="max-w-3xl mx-auto">

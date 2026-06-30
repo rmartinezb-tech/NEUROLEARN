@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Download, Flag, Trash2, Edit2, ChevronLeft, ChevronRight, CheckSquare, Square } from 'lucide-react';
 import CreateQuestionModal from '../components/questions/CreateQuestionModal';
 import EditQuestionModal from '../components/questions/EditQuestionModal';
+import { COGNITIVE_SKILLS } from '../components/study/SessionConfigHelpers';
 import { toast } from "sonner";
 
 const typeLabels = {
@@ -45,6 +46,7 @@ export default function Questions() {
   const [search, setSearch] = useState('');
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [filterSkill, setFilterSkill] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [editQuestion, setEditQuestion] = useState(null);
   const [page, setPage] = useState(0);
@@ -62,9 +64,10 @@ export default function Questions() {
   };
 
   const filtered = questions.filter(q => {
-    if (search && !q.statement?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !q.statement?.toLowerCase().includes(search.toLowerCase()) && !q.question?.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterSubject !== 'all' && q.subject !== filterSubject) return false;
     if (filterType !== 'all' && q.type !== filterType) return false;
+    if (filterSkill !== 'all' && q.cognitive_skill !== filterSkill) return false;
     return true;
   });
 
@@ -168,6 +171,13 @@ export default function Questions() {
             {Object.entries(typeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={filterSkill} onValueChange={v => { setFilterSkill(v); setPage(0); }}>
+          <SelectTrigger className="w-[200px] rounded-xl"><SelectValue placeholder="Habilidad cognitiva" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las habilidades</SelectItem>
+            {COGNITIVE_SKILLS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Questions list */}
@@ -209,6 +219,9 @@ export default function Questions() {
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <Badge variant="secondary" className="text-xs">{typeLabels[q.type] || q.type}</Badge>
                         <Badge variant="outline" className="text-xs">{q.subject}</Badge>
+                        {q.cognitive_skill && (
+                          <Badge className="text-xs bg-teal-500/10 text-teal-700 border-teal-500/30 border">🧠 {q.cognitive_skill}</Badge>
+                        )}
                         {q.origin && <Badge variant="outline" className="text-xs capitalize">{q.origin}</Badge>}
                         <StarRating value={personalDiff} onChange={(v) => handleDifficultyChange(q.id, v)} />
                         {personalDiff === 0 && <span className="text-xs text-muted-foreground/50">Sin clasificar</span>}
