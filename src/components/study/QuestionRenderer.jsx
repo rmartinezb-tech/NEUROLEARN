@@ -20,7 +20,7 @@ const typeLabels = {
   clinical_case: 'Caso Clínico', flashcard: 'Flashcard',
 };
 
-export default function QuestionRenderer({ question, onAnswer, answered, isCorrect }) {
+export default function QuestionRenderer({ question, onAnswer, onReveal, answered, isCorrect }) {
   const [selected, setSelected] = useState(null);
   const [textAnswer, setTextAnswer] = useState('');
   const [flipped, setFlipped] = useState(false);
@@ -99,7 +99,7 @@ export default function QuestionRenderer({ question, onAnswer, answered, isCorre
     onAnswer(correct, JSON.stringify(matchSelections));
   };
 
-  const handleDevShowAnswer = () => setDevPhase('shown');
+  const handleDevShowAnswer = () => { setDevPhase('shown'); onReveal?.(); };
 
   const handleDevChoice = (choice) => {
     if (answered) return;
@@ -261,7 +261,7 @@ export default function QuestionRenderer({ question, onAnswer, answered, isCorre
         return (
           <div className="text-center space-y-4">
             {!flipped ? (
-              <Button onClick={() => setFlipped(true)} variant="outline" className="rounded-xl py-8 px-12 text-lg w-full">
+              <Button onClick={() => { setFlipped(true); onReveal?.(); }} variant="outline" className="rounded-xl py-8 px-12 text-lg w-full">
                 Voltear tarjeta 🔄
               </Button>
             ) : (

@@ -31,6 +31,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
 
   // ---- Answer flow ----
   const [answered, setAnswered] = useState(false);
+  const [revealedAnswer, setRevealedAnswer] = useState(false);
   const [isCorrect, setIsCorrect] = useState(null);
   const [confidence, setConfidence] = useState(0);
   const [dismissFatigue, setDismissFatigue] = useState(false);
@@ -121,6 +122,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     setCurrentQ(shuffled[0]);
     setCycle(newCycle);
     setAnswered(false);
+    setRevealedAnswer(false);
     setIsCorrect(null);
     setConfidence(0);
   }, [allQ]);
@@ -179,7 +181,20 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
 
   const handleContinue = () => {
     // NO SOUND HERE
+    // If answer was revealed (dev/clinical/flashcard) but user skipped self-rating, count as incorrect
+    if (revealedAnswer && !answered) {
+      const responseTime = (Date.now() - lastAnswerTimeRef.current) / 1000;
+      lastAnswerTimeRef.current = Date.now();
+      setStats(prev => ({
+        ...prev,
+        incorrect: prev.incorrect + 1,
+        total: prev.total + 1,
+        answers: [...prev.answers, { question_id: currentQ.id, answered_correctly: false, time_seconds: responseTime, confidence }],
+        responseTimes: [...prev.responseTimes, responseTime].slice(-15),
+      }));
+    }
     setAnswered(false);
+    setRevealedAnswer(false);
     setIsCorrect(null);
     setConfidence(0);
     setFatigueAlert(false);
@@ -368,6 +383,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
             <QuestionRenderer
               question={currentQ}
               onAnswer={handleAnswer}
+              onReveal={() => setRevealedAnswer(true)}
               answered={answered}
               isCorrect={isCorrect}
             />
@@ -376,7 +392,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
       )}
 
       {/* Post-answer: Continue button */}
-      {answered && !isPaused && (
+      {(answered || revealedAnswer) && !isPaused && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <Button onClick={handleContinue} className="w-full rounded-xl" size="lg">
             Continuar <ArrowRight className="ml-2 h-4 w-4" />
