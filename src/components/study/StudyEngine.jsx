@@ -22,11 +22,13 @@ const DEFAULT_CONFIG = { blockMinutes: 25, pauseMinutes: 5, blocks: 1, cycles: 1
 export default function StudyEngine({ questions, profile, sessionType, config: cfg, onBack, interleaved = false }) {
   const config = { ...DEFAULT_CONFIG, ...(cfg || {}) };
 
-  // ---- Cycle/queue state ----
-  const [allQ] = useState(() => shuffle(questions));
-  const [pendingIds, setPendingIds] = useState(() => new Set(questions.map(q => q.id)));
-  const [priorityQueue, setPriorityQueue] = useState([]); // last 4 wrong, pending
-  const [mainQueue, setMainQueue] = useState(() => shuffle(questions).slice(1));
+  // ---- Cycle/queue state (Anki-like) ----
+  // Each entry: { question, streak, lapses }
+  // streak: consecutive correct answers; lapses: total wrong answers
+  // Graduate rules: if lapses===0, 1 correct; if lapses>0, 2 consecutive corrects
+  const [studyQueue, setStudyQueue] = useState(() =>
+    shuffle(questions).map(q => ({ question: q, streak: 0, lapses: 0 }))
+  );
   const [currentQ, setCurrentQ] = useState(() => shuffle(questions)[0]);
 
   // ---- Answer flow ----
@@ -95,38 +97,17 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     }
   };
 
-  const getNextQuestion = useCallback((pendIds, pQueue, mQueue) => {
-    // Priority first (last wrong answers still pending)
-    const filteredPriority = pQueue.filter(q => pendIds.has(q.id));
-    if (filteredPriority.length > 0) {
-      return { next: filteredPriority[0], newPriority: filteredPriority.slice(1), newMain: mQueue };
-    }
-    // Main queue
-    const filteredMain = mQueue.filter(q => pendIds.has(q.id));
-    if (filteredMain.length > 0) {
-      return { next: filteredMain[0], newPriority: filteredPriority, newMain: filteredMain.slice(1) };
-    }
-    // Refill if pending still has items
-    if (pendIds.size > 0) {
-      const refill = shuffle(allQ.filter(q => pendIds.has(q.id)));
-      return { next: refill[0], newPriority: [], newMain: refill.slice(1) };
-    }
-    return null; // Cycle complete
-  }, [allQ]);
-
   const initCycle = useCallback((newCycle) => {
-    const newPending = new Set(allQ.map(q => q.id));
-    const shuffled = shuffle(allQ);
-    setPendingIds(newPending);
-    setPriorityQueue([]);
-    setMainQueue(shuffled.slice(1));
-    setCurrentQ(shuffled[0]);
+    const newQueue = shuffle(questions).map(q => ({ question: q, streak: 0, lapses: 0 }));
+    setStudyQueue(newQueue);
+    setCurrentQ(newQueue[0].question);
     setCycle(newCycle);
     setAnswered(false);
     setRevealedAnswer(false);
+    setAttemptKey(k => k + 1);
     setIsCorrect(null);
     setConfidence(0);
-  }, [allQ]);
+  }, [questions]); // eslint-disable-line
 
   const startNextBlock = useCallback(() => {
     const newBlock = block + 1;
@@ -136,7 +117,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     initCycle(1);
   }, [block, config.blockMinutes, initCycle]);
 
-  const handleAnswer = (correct) => {
+  const handleAnswer = (correct, response) => {
     const now = Date.now();
     const responseTime = (now - lastAnswerTimeRef.current) / 1000;
     lastAnswerTimeRef.current = now;
@@ -168,22 +149,39 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
       };
     });
 
-    // Update pending and priority queues
-    if (correct) {
-      setPendingIds(prev => { const n = new Set(prev); n.delete(currentQ.id); return n; });
-      setPriorityQueue(prev => prev.filter(q => q.id !== currentQ.id));
-    } else {
-      setPriorityQueue(prev => [...prev.filter(q => q.id !== currentQ.id), currentQ].slice(-4));
-    }
+    // Anki-like queue update
+    setStudyQueue(prev => {
+      const [head, ...rest] = prev;
+      if (!head) return prev;
+      if (correct) {
+        const entry = { ...head, streak: head.streak + 1 };
+        // Graduate: first-time correct with no lapses OR two consecutive corrects
+        const graduate = entry.lapses === 0 ? entry.streak >= 1 : entry.streak >= 2;
+        if (graduate) return rest;
+        // Re-insert after ~8 questions for second-chance learning
+        const pos = Math.min(8, rest.length);
+        return [...rest.slice(0, pos), entry, ...rest.slice(pos)];
+      } else {
+        const isPartial = response === 'partial';
+        const entry = { ...head, streak: 0, lapses: head.lapses + 1 };
+        // Wrong: re-insert after 3 questions; partial: after 5
+        const pos = Math.min(isPartial ? 5 : 3, rest.length);
+        return [...rest.slice(0, pos), entry, ...rest.slice(pos)];
+      }
+    });
 
     setAnswered(true);
     setIsCorrect(correct);
   };
 
   const handleContinue = () => {
-    // NO SOUND HERE
-    // If answer was revealed (dev/clinical/flashcard) but user skipped self-rating, count as incorrect
-    if (revealedAnswer && !answered) {
+    const wasRevealed = revealedAnswer;
+    const wasAnswered = answered;
+
+    // studyQueue was already updated by handleAnswer for normal flow.
+    // For skipped self-rating (revealed but not answered), update queue manually here.
+    let nextQueue = studyQueue;
+    if (wasRevealed && !wasAnswered) {
       const responseTime = (Date.now() - lastAnswerTimeRef.current) / 1000;
       lastAnswerTimeRef.current = Date.now();
       setStats(prev => ({
@@ -193,7 +191,17 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
         answers: [...prev.answers, { question_id: currentQ.id, answered_correctly: false, time_seconds: responseTime, confidence }],
         responseTimes: [...prev.responseTimes, responseTime].slice(-15),
       }));
+      const [head, ...rest] = studyQueue;
+      if (head) {
+        const entry = { ...head, streak: 0, lapses: head.lapses + 1 };
+        const pos = Math.min(3, rest.length);
+        nextQueue = [...rest.slice(0, pos), entry, ...rest.slice(pos)];
+      } else {
+        nextQueue = [];
+      }
+      setStudyQueue(nextQueue);
     }
+
     setAnswered(false);
     setRevealedAnswer(false);
     setAttemptKey(k => k + 1);
@@ -201,25 +209,12 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     setConfidence(0);
     setFatigueAlert(false);
 
-    // Check if cycle complete (pending is empty after last correct answer)
-    const updatedPending = new Set(pendingIds);
-    // Note: pendingIds state may not have updated yet from handleAnswer, use local logic
-    // We check: if answered correctly, remove from set
-    if (isCorrect) updatedPending.delete(currentQ.id);
-
-    const result = getNextQuestion(updatedPending, isCorrect ? priorityQueue.filter(q => q.id !== currentQ.id) : priorityQueue, mainQueue);
-
-    if (result) {
-      setCurrentQ(result.next);
-      setPriorityQueue(result.newPriority);
-      setMainQueue(result.newMain);
-    } else {
-      // Cycle complete
+    if (nextQueue.length === 0) {
+      // Cycle complete — all questions graduated
       if (!muted) playBlockComplete();
       if (cycle < config.cycles) {
         initCycle(cycle + 1);
       } else {
-        // All cycles done for this block
         if (block < config.blocks) {
           setPhase('cycle_end');
         } else {
@@ -227,6 +222,8 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
           if (!muted) setTimeout(() => playSessionComplete(), 200);
         }
       }
+    } else {
+      setCurrentQ(nextQueue[0].question);
     }
   };
 
@@ -332,7 +329,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
           </div>
           <div className="text-xs">
             <p className="font-semibold">Bloque {block}/{config.blocks} · Ciclo {cycle}/{config.cycles}</p>
-            <p className="text-muted-foreground">{accuracy}% prec. · {stats.correct}/{stats.total}</p>
+            <p className="text-muted-foreground">{accuracy}% prec. · {questions.length - studyQueue.length}/{questions.length} aprendidas</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -364,8 +361,8 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
         </div>
       )}
 
-      {/* Confidence selector (before answering) */}
-      {!answered && !isPaused && (
+      {/* Confidence selector (before answering or revealing) */}
+      {!answered && !revealedAnswer && !isPaused && (
         <div className="bg-card border border-border rounded-xl px-4 py-2 flex items-center gap-3">
           <span className="text-xs text-muted-foreground shrink-0">Confianza:</span>
           <div className="flex gap-1">
