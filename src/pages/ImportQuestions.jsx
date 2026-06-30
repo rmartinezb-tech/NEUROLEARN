@@ -323,14 +323,23 @@ NOTAS IMPORTANTES
   const handleImport = async () => {
     setImporting(true);
     let done = 0;
+    let failed = 0;
     for (const q of parsed) {
-      await base44.entities.Question.create(q);
-      done++;
-      setProgress(Math.round((done / parsed.length) * 100));
+      try {
+        await base44.entities.Question.create(q);
+        done++;
+      } catch {
+        failed++;
+      }
+      setProgress(Math.round(((done + failed) / parsed.length) * 100));
     }
     setImporting(false);
-    setImported(true);
-    toast.success(`${parsed.length} preguntas importadas exitosamente`);
+    if (done > 0) {
+      setImported(true);
+      toast.success(`${done} preguntas importadas${failed > 0 ? ` · ${failed} fallaron` : ''}`);
+    } else {
+      toast.error('No se pudo importar ninguna pregunta. Verificá que la columna cognitive_skill exista en Supabase.');
+    }
   };
 
   const handleAIFix = async (err, i) => {
@@ -399,36 +408,37 @@ NOTAS IMPORTANTES
           {/* Preview valid */}
           {parsed.length > 0 && (
             <div className="bg-card border border-border rounded-xl p-4">
-              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" /> {parsed.length} preguntas válidas</h3>
-              <p className="text-xs text-muted-foreground mb-2">Puedes editar el enunciado o la respuesta de las primeras {Math.min(5, parsed.length)} antes de importar.</p>
-              <ScrollArea className="max-h-80">
-                <div className="space-y-3">
-                  {parsed.slice(0, 5).map((q, i) => (
-                    <div key={i} className="text-sm py-2 border-b border-border/50 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-muted-foreground">{i + 1}.</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{q.type}</span>
-                        {q.cognitive_skill && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{q.cognitive_skill}</span>
-                        )}
-                      </div>
-                      <input
-                        className="w-full text-sm bg-background border border-border rounded-lg px-2 py-1"
-                        value={q.statement || ''}
-                        onChange={(e) => updateParsedField(i, 'statement', e.target.value)}
-                      />
-                      {!['development', 'clinical_case', 'matching', 'order_sequence'].includes(q.type) && (
-                        <input
-                          className="w-full text-xs bg-background border border-border rounded-lg px-2 py-1 text-muted-foreground"
-                          value={q.correct_answer || ''}
-                          onChange={(e) => updateParsedField(i, 'correct_answer', e.target.value)}
-                        />
+              <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" /> {parsed.length} preguntas listas para importar
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">Revisá y editá cada pregunta antes de confirmar. Los cambios no se guardan hasta que hagas clic en "Confirmar e importar".</p>
+              <div className="overflow-y-auto max-h-[420px] pr-1 space-y-3">
+                {parsed.map((q, i) => (
+                  <div key={i} className="text-sm py-2 border-b border-border/50 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-muted-foreground font-medium">{i + 1}.</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{q.type}</span>
+                      {q.cognitive_skill && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{q.cognitive_skill}</span>
                       )}
                     </div>
-                  ))}
-                </div>
-                {parsed.length > 5 && <p className="text-xs text-muted-foreground mt-2">...y {parsed.length - 5} más</p>}
-              </ScrollArea>
+                    <input
+                      className="w-full text-sm bg-background border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                      value={q.statement || ''}
+                      onChange={(e) => updateParsedField(i, 'statement', e.target.value)}
+                      placeholder="Enunciado"
+                    />
+                    {!['development', 'clinical_case', 'matching', 'order_sequence'].includes(q.type) && (
+                      <input
+                        className="w-full text-xs bg-background border border-border rounded-lg px-2 py-1.5 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        value={q.correct_answer || ''}
+                        onChange={(e) => updateParsedField(i, 'correct_answer', e.target.value)}
+                        placeholder="Respuesta correcta"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -471,7 +481,7 @@ NOTAS IMPORTANTES
 
           {!importing && parsed.length > 0 && (
             <Button onClick={handleImport} className="w-full rounded-xl" size="lg">
-              Importar {parsed.length} preguntas al banco global
+              Confirmar e importar {parsed.length} preguntas al banco
             </Button>
           )}
         </div>
