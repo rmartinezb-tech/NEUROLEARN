@@ -8,6 +8,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AppLayout from './components/AppLayout';
 import Landing from './pages/Landing';
+import Splash from './pages/Splash';
 import SignIn from './pages/SignIn';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -58,12 +59,13 @@ const AuthenticatedApp = () => {
 
   return (
     <Routes>
+      <Route path="/splash" element={<Splash />} />
       <Route path="/landing" element={<Landing />} />
       <Route path="/sign-in" element={<SignIn />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/sign-in" replace />} />}>
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/splash" replace />} />}>
         <Route path="/onboarding" element={<Onboarding />} />
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />

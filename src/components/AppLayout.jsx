@@ -71,7 +71,7 @@ export default function AppLayout() {
     if (profile) {
       base44.entities.UserProfile.update(profile.id, { is_online: false });
     }
-    base44.auth.logout('/landing');
+    base44.auth.logout('/splash');
   };
 
   const NavLink = ({ item }) => {
