@@ -320,15 +320,37 @@ NOTAS IMPORTANTES
     return issues;
   };
 
+  const buildPayload = (q) => ({
+    statement: q.statement,
+    type: mapType(q.type),
+    subject: mapSubject(q.subject),
+    custom_subject: q.custom_subject || null,
+    cognitive_skill: mapCognitiveSkill(q.cognitive_skill) || null,
+    options: Array.isArray(q.options) ? q.options : [],
+    correct_answer: q.correct_answer || null,
+    correct_index: q.correct_index != null ? q.correct_index : null,
+    explanation: q.explanation || null,
+    hints: q.hints || null,
+    difficulty_suggested: q.difficulty_suggested || null,
+    image_url: q.image_url || null,
+    tags: Array.isArray(q.tags) ? q.tags : [],
+    origin: 'imported',
+    matching_pairs: Array.isArray(q.matching_pairs) ? q.matching_pairs : [],
+    sequence_order: Array.isArray(q.sequence_order) ? q.sequence_order : [],
+    flashcard_back: q.flashcard_back || null,
+    status: 'active',
+  });
+
   const handleImport = async () => {
     setImporting(true);
     let done = 0;
     let failed = 0;
     for (const q of parsed) {
       try {
-        await base44.entities.Question.create(q);
+        await base44.entities.Question.create(buildPayload(q));
         done++;
-      } catch {
+      } catch (e) {
+        console.error('Import error:', e.message, e.details);
         failed++;
       }
       setProgress(Math.round(((done + failed) / parsed.length) * 100));
@@ -338,7 +360,7 @@ NOTAS IMPORTANTES
       setImported(true);
       toast.success(`${done} preguntas importadas${failed > 0 ? ` · ${failed} fallaron` : ''}`);
     } else {
-      toast.error('No se pudo importar ninguna pregunta. Verificá que la columna cognitive_skill exista en Supabase.');
+      toast.error('No se pudo importar ninguna pregunta — revisá la consola (F12) para ver el error');
     }
   };
 
