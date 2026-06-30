@@ -325,7 +325,6 @@ NOTAS IMPORTANTES
     type: mapType(q.type),
     subject: mapSubject(q.subject),
     custom_subject: q.custom_subject || null,
-    cognitive_skill: mapCognitiveSkill(q.cognitive_skill) || null,
     options: Array.isArray(q.options) ? q.options : [],
     correct_answer: q.correct_answer || null,
     correct_index: q.correct_index != null ? q.correct_index : null,
