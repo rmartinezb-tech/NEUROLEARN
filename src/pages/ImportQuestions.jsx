@@ -60,12 +60,15 @@ Ejemplo celda options: Opción A|Opción B|Opción C|Opción D
 ========================================================
 FORMATO 3 — JSON (.json)
 ========================================================
-Arreglo JSON con objetos. Ejemplo:
+Arreglo JSON con objetos (también se acepta envuelto en { "questions": [...] }).
+Este formato se lee directamente, sin pasar por IA, por lo que conserva TODOS
+los campos sin pérdida. Ejemplo:
 [
   {
     "statement": "¿Qué neurotransmisor regula el estado de ánimo?",
     "type": "multiple_choice",
     "subject": "Neurociencias",
+    "cognitive_skill": "Conceptual",
     "options": ["Dopamina", "Serotonina", "GABA", "Glutamato"],
     "correct_answer": "Serotonina",
     "explanation": "La serotonina es el principal regulador del estado de ánimo",
@@ -80,6 +83,16 @@ Arreglo JSON con objetos. Ejemplo:
     "difficulty_suggested": 1
   }
 ]
+
+Campo opcional "cognitive_skill" — habilidad cognitiva trabajada:
+Conceptual, Procedimental, Aplicación, Comparación, Causa y efecto, Memorización,
+Resolución de problemas, Análisis, Síntesis, Evaluación, Interpretación, Definición,
+Ejemplificación.
+
+Este archivo JSON se puede generar automáticamente con la skill de Claude
+"neurolearn-question-generator", que produce el formato exacto compatible con
+esta importación (incluye matching_pairs, sequence_order y flashcard_back según
+el tipo de pregunta).
 
 ========================================================
 FORMATO 4 — TXT (.txt)
@@ -169,59 +182,81 @@ NOTAS IMPORTANTES
     setImported(false);
 
     const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
-    
-    const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
-      file_url,
-      json_schema: {
-        type: "object",
-        properties: {
-          questions: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                statement: { type: "string" },
-                type: { type: "string" },
-                subject: { type: "string" },
-                options: { type: "array", items: { type: "string" } },
-                correct_answer: { type: "string" },
-                explanation: { type: "string" },
+    const isJson = f.name.toLowerCase().endsWith('.json');
+
+    let qs;
+    if (isJson) {
+      let data;
+      try {
+        const res = await fetch(file_url);
+        data = JSON.parse(await res.text());
+      } catch {
+        toast.error('El archivo JSON no es válido');
+        return;
+      }
+      qs = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null);
+      if (!qs) {
+        toast.error('El archivo JSON no contiene un arreglo de preguntas válido');
+        return;
+      }
+    } else {
+      const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
+        file_url,
+        json_schema: {
+          type: "object",
+          properties: {
+            questions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  statement: { type: "string" },
+                  type: { type: "string" },
+                  subject: { type: "string" },
+                  options: { type: "array", items: { type: "string" } },
+                  correct_answer: { type: "string" },
+                  explanation: { type: "string" },
+                }
               }
             }
           }
         }
+      });
+
+      if (result.status === 'success' && result.output?.questions) {
+        qs = result.output.questions;
+      } else {
+        toast.error('Error al procesar el archivo');
+        return;
+      }
+    }
+
+    const valid = [];
+    const errs = [];
+
+    qs.forEach((q, i) => {
+      const issues = validateQuestion(q);
+
+      if (issues.length > 0) {
+        errs.push({ row: i + 1, issues, question: q });
+      } else {
+        valid.push({
+          ...q,
+          type: mapType(q.type),
+          subject: mapSubject(q.subject),
+          cognitive_skill: mapCognitiveSkill(q.cognitive_skill),
+          status: 'active',
+          origin: 'imported',
+        });
       }
     });
 
-    if (result.status === 'success' && result.output?.questions) {
-      const qs = result.output.questions;
-      const valid = [];
-      const errs = [];
-      
-      qs.forEach((q, i) => {
-        const issues = [];
-        if (!q.statement?.trim()) issues.push('Enunciado vacío');
-        if (!q.type) issues.push('Tipo no definido');
-        if (!q.correct_answer && q.type !== 'development' && q.type !== 'clinical_case') issues.push('Sin respuesta correcta');
-        
-        if (issues.length > 0) {
-          errs.push({ row: i + 1, issues, question: q });
-        } else {
-          valid.push({
-            ...q,
-            type: mapType(q.type),
-            subject: mapSubject(q.subject),
-            status: 'active',
-            origin: 'imported',
-          });
-        }
-      });
-      
-      setParsed(valid);
-      setErrors(errs);
-    } else {
-      toast.error('Error al procesar el archivo');
-    }
+    setParsed(valid);
+    setErrors(errs);
+  };
+
+  const updateParsedField = (i, field, value) => {
+    setParsed(prev => prev.map((q, idx) => idx === i ? { ...q, [field]: value } : q));
   };
 
   const mapType = (t) => {
@@ -245,6 +280,44 @@ NOTAS IMPORTANTES
     if (lower.includes('cuidado') || lower.includes('salud')) return 'Cuidados de la Salud';
     if (lower.includes('biomédic') || lower.includes('biomedic')) return 'Ciencias Biomédicas';
     return 'Otras';
+  };
+
+  const COGNITIVE_SKILLS = [
+    'Conceptual', 'Procedimental', 'Aplicación', 'Comparación', 'Causa y efecto',
+    'Memorización', 'Resolución de problemas', 'Análisis', 'Síntesis', 'Evaluación',
+    'Interpretación', 'Definición', 'Ejemplificación',
+  ];
+
+  const mapCognitiveSkill = (s) => {
+    if (!s?.trim()) return undefined;
+    return COGNITIVE_SKILLS.find(v => v.toLowerCase() === s.trim().toLowerCase());
+  };
+
+  const validateQuestion = (q) => {
+    const issues = [];
+    if (!q.statement?.trim()) issues.push('Enunciado vacío');
+    if (!q.type) issues.push('Tipo no definido');
+
+    const type = mapType(q.type);
+
+    if (type === 'matching') {
+      const pairs = Array.isArray(q.matching_pairs) ? q.matching_pairs.filter(p => p?.left?.trim() && p?.right?.trim()) : [];
+      if (pairs.length < 3) issues.push('Pares de matching incompletos');
+    } else if (type === 'order_sequence') {
+      const steps = Array.isArray(q.sequence_order) ? q.sequence_order.filter(s => s?.trim()) : [];
+      if (steps.length < 3) issues.push('Secuencia incompleta');
+    } else if (type === 'flashcard') {
+      if (!q.flashcard_back?.trim()) issues.push('Falta reverso de flashcard');
+    } else if (type === 'true_false') {
+      if (q.correct_answer?.trim() !== 'Verdadero' && q.correct_answer?.trim() !== 'Falso') issues.push('Valor de Verdadero/Falso inválido');
+    } else if (type === 'multiple_choice') {
+      const opts = Array.isArray(q.options) ? q.options : [];
+      if (opts.length < 2 || !opts.includes(q.correct_answer)) issues.push('Alternativas inválidas');
+    } else if (type === 'fill_blank') {
+      if (!q.correct_answer?.trim()) issues.push('Sin respuesta correcta');
+    }
+
+    return issues;
   };
 
   const handleImport = async () => {
@@ -327,12 +400,33 @@ NOTAS IMPORTANTES
           {parsed.length > 0 && (
             <div className="bg-card border border-border rounded-xl p-4">
               <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" /> {parsed.length} preguntas válidas</h3>
-              <ScrollArea className="max-h-40">
-                {parsed.slice(0, 5).map((q, i) => (
-                  <div key={i} className="text-sm py-1 border-b border-border/50">
-                    <span className="text-muted-foreground">{i + 1}.</span> {q.statement?.substring(0, 80)}...
-                  </div>
-                ))}
+              <p className="text-xs text-muted-foreground mb-2">Puedes editar el enunciado o la respuesta de las primeras {Math.min(5, parsed.length)} antes de importar.</p>
+              <ScrollArea className="max-h-80">
+                <div className="space-y-3">
+                  {parsed.slice(0, 5).map((q, i) => (
+                    <div key={i} className="text-sm py-2 border-b border-border/50 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-muted-foreground">{i + 1}.</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{q.type}</span>
+                        {q.cognitive_skill && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{q.cognitive_skill}</span>
+                        )}
+                      </div>
+                      <input
+                        className="w-full text-sm bg-background border border-border rounded-lg px-2 py-1"
+                        value={q.statement || ''}
+                        onChange={(e) => updateParsedField(i, 'statement', e.target.value)}
+                      />
+                      {!['development', 'clinical_case', 'matching', 'order_sequence'].includes(q.type) && (
+                        <input
+                          className="w-full text-xs bg-background border border-border rounded-lg px-2 py-1 text-muted-foreground"
+                          value={q.correct_answer || ''}
+                          onChange={(e) => updateParsedField(i, 'correct_answer', e.target.value)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
                 {parsed.length > 5 && <p className="text-xs text-muted-foreground mt-2">...y {parsed.length - 5} más</p>}
               </ScrollArea>
             </div>

@@ -34,6 +34,25 @@
       "type": "string",
       "description": "Materia personalizada si es Otras"
     },
+    "cognitive_skill": {
+      "type": "string",
+      "enum": [
+        "Conceptual",
+        "Procedimental",
+        "Aplicación",
+        "Comparación",
+        "Causa y efecto",
+        "Memorización",
+        "Resolución de problemas",
+        "Análisis",
+        "Síntesis",
+        "Evaluación",
+        "Interpretación",
+        "Definición",
+        "Ejemplificación"
+      ],
+      "description": "Habilidad cognitiva trabajada"
+    },
     "options": {
       "type": "array",
       "items": {
