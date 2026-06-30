@@ -32,6 +32,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
   // ---- Answer flow ----
   const [answered, setAnswered] = useState(false);
   const [revealedAnswer, setRevealedAnswer] = useState(false);
+  const [attemptKey, setAttemptKey] = useState(0);
   const [isCorrect, setIsCorrect] = useState(null);
   const [confidence, setConfidence] = useState(0);
   const [dismissFatigue, setDismissFatigue] = useState(false);
@@ -195,6 +196,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     }
     setAnswered(false);
     setRevealedAnswer(false);
+    setAttemptKey(k => k + 1);
     setIsCorrect(null);
     setConfidence(0);
     setFatigueAlert(false);
@@ -379,7 +381,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
       {/* Question renderer */}
       {currentQ && !isPaused && (
         <AnimatePresence mode="wait">
-          <motion.div key={currentQ.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+          <motion.div key={`${currentQ.id}-${attemptKey}`} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <QuestionRenderer
               question={currentQ}
               onAnswer={handleAnswer}
