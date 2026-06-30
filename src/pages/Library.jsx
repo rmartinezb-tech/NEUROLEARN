@@ -115,8 +115,7 @@ function UploadModal({ onClose, profile, user, onUploaded }) {
       const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
       setFileUrl(file_url);
       setForm(prev => ({ ...prev, title: prev.title || f.name.replace(/\.[^.]+$/, '') }));
-      toast.success('Archivo subido ✓');
-      setStep(2);
+      toast.success('Archivo subido ✓ — hacé clic en Continuar');
     } catch {
       toast.error('Error al subir el archivo');
     } finally {
@@ -166,6 +165,11 @@ function UploadModal({ onClose, profile, user, onUploaded }) {
               )}
             </label>
             <input id="lib-file-input" type="file" accept={ACCEPTED} className="hidden" onChange={handleFileChange} disabled={uploading} />
+            {fileUrl && !uploading && (
+              <Button className="w-full gap-2" onClick={() => setStep(2)}>
+                Continuar →
+              </Button>
+            )}
           </div>
         )}
 

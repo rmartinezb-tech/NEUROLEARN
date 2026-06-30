@@ -18,7 +18,7 @@ export default function SelectiveSession({ profile, onBack }) {
 
   useEffect(() => {
     base44.entities.Question.list('-created_date', 1000).then(qs => {
-      setAllQuestions(qs);
+      setAllQuestions(qs.filter(q => !q.status || q.status === 'active'));
       setLoading(false);
     });
   }, []);

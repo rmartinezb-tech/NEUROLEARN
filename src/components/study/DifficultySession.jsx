@@ -24,18 +24,16 @@ export default function DifficultySession({ profile, onBack }) {
     setLoading(true);
     const ratings = profile?.difficulty_ratings || {};
     let allQ = await base44.entities.Question.list('-created_date', 1000);
+    allQ = allQ.filter(q => !q.status || q.status === 'active');
     if (config.subject !== 'Todas') allQ = allQ.filter(q => q.subject === config.subject);
-    // Filter by personal difficulty ratings
     allQ = allQ.filter(q => config.levels.includes(ratings[q.id]));
     if (allQ.length === 0) {
-      toast.error('No tienes preguntas clasificadas con ese nivel de dificultad. Clasifica preguntas desde el Banco de Preguntas (⭐).');
+      toast.error('No tenés preguntas clasificadas con ese nivel. Clasificá preguntas desde el Banco de Preguntas (⭐).');
       setLoading(false);
       return;
     }
     if (allQ.length < config.questionCount) {
-      toast.error(`Solo hay ${allQ.length} preguntas con esa dificultad personal. Ajusta la cantidad o el rango.`);
-      setLoading(false);
-      return;
+      toast.info(`Hay ${allQ.length} preguntas con esa dificultad. Se usarán todas.`);
     }
     const selected = allQ.sort(() => Math.random() - 0.5).slice(0, config.questionCount);
     setQuestions(selected);

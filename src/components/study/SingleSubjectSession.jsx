@@ -15,7 +15,7 @@ const QTYPES = [
 
 export default function SingleSubjectSession({ profile, onBack }) {
   const [config, setConfig] = useState({
-    subject: 'Neurociencias', types: [], questionCount: 60,
+    subject: 'Neurociencias', types: [], questionCount: 20,
     blockMinutes: 25, pauseMinutes: 5, cycles: 2, blocks: 1,
     difficulty: 'all',
   });
@@ -28,17 +28,19 @@ export default function SingleSubjectSession({ profile, onBack }) {
 
   const start = async () => {
     setLoading(true);
-    let allQ = await base44.entities.Question.filter({ subject: config.subject }, '-created_date', 1000);
+    let allQ = await base44.entities.Question.filter({ subject: config.subject, status: 'active' }, '-created_date', 500);
     if (config.types.length > 0) allQ = allQ.filter(q => config.types.includes(q.type));
     if (config.difficulty !== 'all') {
       const map = { easy: [1, 2], medium: [3], hard: [4, 5] };
-      const range = map[config.difficulty] || [];
-      allQ = allQ.filter(q => range.includes(q.difficulty_suggested));
+      allQ = allQ.filter(q => (map[config.difficulty] || []).includes(q.difficulty_suggested));
     }
-    if (allQ.length < config.questionCount) {
-      toast.error(`Solo hay ${allQ.length} preguntas con esos parámetros. Necesitas al menos ${config.questionCount}.`);
+    if (allQ.length === 0) {
+      toast.error('No hay preguntas activas con esos filtros. Ajustá los parámetros.');
       setLoading(false);
       return;
+    }
+    if (allQ.length < config.questionCount) {
+      toast.info(`Hay ${allQ.length} preguntas disponibles con esos filtros. Se usarán todas.`);
     }
     const selected = allQ.sort(() => Math.random() - 0.5).slice(0, config.questionCount);
     setQuestions(selected);
