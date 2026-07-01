@@ -68,12 +68,14 @@ export default function Duels() {
     const shuffled = [...eligible].sort(() => Math.random() - 0.5).slice(0, 10);
 
     await base44.entities.Duel.create({
-      challenger_id:   profile.user_id,
-      challenger_name: profile.display_name,
-      opponent_id:     selectedOpponent,
-      opponent_name:   opponent?.display_name || 'Oponente',
-      status:          'pending',
-      questions:       shuffled.map(q => q.id),
+      challenger_id:    profile.user_id,
+      challenger_name:  profile.display_name,
+      opponent_id:      selectedOpponent,
+      opponent_name:    opponent?.display_name || 'Oponente',
+      status:           'pending',
+      questions:        shuffled.map(q => q.id),
+      challenger_score: null,   // null = hasn't played yet (distinguishes from 0/10)
+      opponent_score:   null,
     });
 
     await base44.entities.Notification.create({
@@ -140,6 +142,7 @@ export default function Duels() {
         const myScore  = resultPopup.challenger_id === profile.user_id ? resultPopup.challenger_score : resultPopup.opponent_score;
         const theirScr = resultPopup.challenger_id === profile.user_id ? resultPopup.opponent_score   : resultPopup.challenger_score;
         const theirNm  = resultPopup.challenger_id === profile.user_id ? resultPopup.opponent_name    : resultPopup.challenger_name;
+        const stolen   = resultPopup.stolen_item;
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
             <motion.div
@@ -158,12 +161,21 @@ export default function Duels() {
                   <p className="text-2xl font-bold">{theirScr ?? '?'}</p>
                 </div>
               </div>
-              <div className={`rounded-xl p-3 text-sm font-medium ${won ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                {won
+              <div className={`rounded-xl p-3 text-sm font-medium ${won && !isTie ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                {won && !isTie
                   ? <>+{SAB_WIN} Saber ⚔️ &nbsp;·&nbsp; +{XP_WIN} XP</>
                   : <>+{XP_LOSE} XP por participar</>
                 }
               </div>
+              {stolen && (
+                <div className={`rounded-xl p-3 border text-sm text-left space-y-0.5 ${won && !isTie
+                  ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                  <p className="font-bold">{won && !isTie ? '⚔️ ¡Robaste!' : '💀 Te robaron'}</p>
+                  <p className="font-medium">{stolen.label}</p>
+                  {!won && <p className="text-xs opacity-70">¡Estúdialo de vuelta para recuperarlo!</p>}
+                </div>
+              )}
               <Button className="w-full rounded-xl" onClick={() => setResultPopup(null)}>Cerrar</Button>
             </motion.div>
           </div>
