@@ -101,18 +101,6 @@ export default function Rankings() {
 
         <TabsContent value="special" className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="font-semibold text-sm mb-3">🧃‍♂️ Científico Loco (Ciencias Biomédicas)</h3>
-            <RankList items={subjectRanking('Ciencias Biomédicas').slice(0, 5)} valueKey={u => u.count} valueLabel="Sesiones" />
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="font-semibold text-sm mb-3">🧠 Genio del Aprendizaje (Neurociencias)</h3>
-            <RankList items={subjectRanking('Neurociencias').slice(0, 5)} valueKey={u => u.count} valueLabel="Sesiones" />
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="font-semibold text-sm mb-3">👩‍⚕️ Florence Nightingale (Cuidados en Salud)</h3>
-            <RankList items={subjectRanking('Cuidados de la Salud').slice(0, 5)} valueKey={u => u.count} valueLabel="Sesiones" />
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
             <h3 className="font-semibold text-sm mb-3">📊 Mejor Precisión Global</h3>
             <RankList items={[...users].filter(u => (u.total_questions_answered||0)>=10).sort((a,b)=>((b.total_correct||0)/(b.total_questions_answered||1))-((a.total_correct||0)/(a.total_questions_answered||1))).slice(0,5)} valueKey={u => `${Math.round(((u.total_correct||0)/(u.total_questions_answered||1))*100)}%`} valueLabel="Precisión" />
           </div>

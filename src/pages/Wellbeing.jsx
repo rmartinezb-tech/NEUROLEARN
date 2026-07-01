@@ -16,13 +16,14 @@ const EMOTIONS = [
   { id: 'okay', emoji: '🎯', label: 'Bien pero distraído/a' },
 ];
 
-// Box Breathing square animation
+const PHASE_COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#94a3b8'];
+
 function BoxBreathing({ onClose }) {
   const phases = [
-    { label: 'Inhala', dur: 4, side: 0 },
-    { label: 'Sostén', dur: 4, side: 1 },
-    { label: 'Exhala', dur: 4, side: 2 },
-    { label: 'Sostén', dur: 4, side: 3 },
+    { label: 'Inhala', sub: 'por la nariz', dur: 4, side: 0 },
+    { label: 'Sostén', sub: 'retén el aire', dur: 4, side: 1 },
+    { label: 'Exhala', sub: 'por la boca', dur: 4, side: 2 },
+    { label: 'Sostén', sub: 'vacía los pulmones', dur: 4, side: 3 },
   ];
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [sec, setSec] = useState(4);
@@ -30,21 +31,21 @@ function BoxBreathing({ onClose }) {
   const [progress, setProgress] = useState(0);
   const [running, setRunning] = useState(true);
   const intervalRef = useRef(null);
-  const totalCycles = 5;
+  const totalCycles = 4;
 
   useEffect(() => {
     if (!running) return;
     intervalRef.current = setInterval(() => {
       setSec(s => {
-        const phase = phases[phaseIdx];
-        const newProgress = ((phase.dur - s + 1) / phase.dur) * 100;
-        setProgress(newProgress);
+        const dur = phases[phaseIdx].dur;
         if (s <= 1) {
-          const nextIdx = (phaseIdx + 1) % 4;
-          if (nextIdx === 0) setCycles(c => c + 1);
-          setPhaseIdx(nextIdx);
-          return phases[nextIdx].dur;
+          const next = (phaseIdx + 1) % 4;
+          if (next === 0) setCycles(c => c + 1);
+          setPhaseIdx(next);
+          setProgress(0);
+          return phases[next].dur;
         }
+        setProgress(((dur - s + 1) / dur) * 100);
         return s - 1;
       });
     }, 1000);
@@ -52,67 +53,117 @@ function BoxBreathing({ onClose }) {
   }, [phaseIdx, running]);
 
   const phase = phases[phaseIdx];
-  const size = 200;
-  const pad = 30;
+  const color = PHASE_COLORS[phaseIdx];
+
+  // SVG geometry
+  const size = 220;
+  const pad = 44;
   const inner = size - pad * 2;
-  // Point position along perimeter
-  const sideLen = inner;
-  const perimeterLen = sideLen * 4;
-  const sideProgress = progress / 100;
-  let px, py;
-  const corners = [[pad, pad], [pad + inner, pad], [pad + inner, pad + inner], [pad, pad + inner]];
-  // Current phase side: 0=top(L->R), 1=right(T->B), 2=bottom(R->L), 3=left(B->T)
+  const corners = [
+    [pad, pad],
+    [pad + inner, pad],
+    [pad + inner, pad + inner],
+    [pad, pad + inner],
+  ];
   const c0 = corners[phase.side];
   const c1 = corners[(phase.side + 1) % 4];
-  px = c0[0] + (c1[0] - c0[0]) * sideProgress;
-  py = c0[1] + (c1[1] - c0[1]) * sideProgress;
+  const sp = progress / 100;
+  const px = c0[0] + (c1[0] - c0[0]) * sp;
+  const py = c0[1] + (c1[1] - c0[1]) * sp;
+
+  const sideLabels = [
+    { x: size / 2, y: pad - 16, label: 'INHALA', anchor: 'middle', idx: 0 },
+    { x: pad + inner + 20, y: size / 2, label: 'SOSTÉN', anchor: 'start', idx: 1 },
+    { x: size / 2, y: pad + inner + 20, label: 'EXHALA', anchor: 'middle', idx: 2 },
+    { x: pad - 20, y: size / 2, label: 'SOSTÉN', anchor: 'end', idx: 3 },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-        className="bg-card border border-border rounded-2xl p-6 max-w-xs w-full text-center space-y-4 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground"><X className="h-5 w-5" /></button>
-        <h3 className="font-bold">Box Breathing</h3>
-        <p className="text-muted-foreground text-sm">{phase.label} — {sec}s</p>
+        className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full text-center relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-5 w-5" />
+        </button>
 
-        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="mx-auto">
-          {/* Square outline */}
-          <rect x={pad} y={pad} width={inner} height={inner} rx="8"
+        <h3 className="font-bold text-lg mb-0.5">Box Breathing</h3>
+        <p className="text-xs text-muted-foreground mb-5">4 lados · 4 segundos · {totalCycles} ciclos</p>
+
+        {/* Phase label */}
+        <motion.div key={phaseIdx} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="mb-1">
+          <p className="text-2xl font-bold" style={{ color }}>{phase.label}</p>
+          <p className="text-xs text-muted-foreground">{phase.sub}</p>
+        </motion.div>
+
+        {/* Countdown */}
+        <motion.div key={`${phaseIdx}-${sec}`} initial={{ scale: 1.25, opacity: 0.6 }} animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3 }} className="mb-4">
+          <span className="text-6xl font-mono font-bold tabular-nums" style={{ color }}>{sec}</span>
+        </motion.div>
+
+        {/* SVG square */}
+        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="mx-auto mb-4 overflow-visible">
+          {/* Base square */}
+          <rect x={pad} y={pad} width={inner} height={inner} rx="10"
             fill="none" stroke="hsl(var(--border))" strokeWidth="2" />
-          {/* Active side highlight */}
-          {[0,1,2,3].map(i => {
-            const c = corners[i]; const cn = corners[(i+1)%4];
-            const active = i === phase.side;
-            return <line key={i} x1={c[0]} y1={c[1]} x2={cn[0]} y2={cn[1]}
-              stroke={active ? 'hsl(var(--primary))' : 'transparent'} strokeWidth="3" strokeLinecap="round" />;
+
+          {/* Active side glow */}
+          {[0, 1, 2, 3].map(i => {
+            const ca = corners[i];
+            const cb = corners[(i + 1) % 4];
+            const active = i === phaseIdx;
+            return (
+              <line key={i}
+                x1={ca[0]} y1={ca[1]} x2={cb[0]} y2={cb[1]}
+                stroke={active ? PHASE_COLORS[i] : 'hsl(var(--border))'}
+                strokeWidth={active ? 3 : 1.5}
+                strokeLinecap="round"
+                style={active ? { filter: `drop-shadow(0 0 5px ${PHASE_COLORS[i]})` } : {}}
+              />
+            );
           })}
-          {/* Corner labels */}
-          {[{x:pad+inner/2,y:pad-12,l:'Inhala →'},{x:pad+inner+18,y:pad+inner/2,l:'↓'},{x:pad+inner/2,y:pad+inner+18,l:'← Exhala'},{x:pad-18,y:pad+inner/2,l:'↑'}].map((lbl,i) => (
-            <text key={i} x={lbl.x} y={lbl.y} textAnchor="middle" dominantBaseline="middle"
-              fontSize="9" fill="hsl(var(--muted-foreground))">{lbl.l}</text>
+
+          {/* Corner dots */}
+          {corners.map((c, i) => (
+            <circle key={i} cx={c[0]} cy={c[1]} r="4"
+              fill={i === phaseIdx || i === (phaseIdx + 1) % 4 ? color : 'hsl(var(--border))'}
+              style={i === phaseIdx ? { filter: `drop-shadow(0 0 4px ${color})` } : {}}
+            />
           ))}
-          {/* Center circle pulse */}
-          <circle cx={size/2} cy={size/2} r={phase.label==='Inhala'?22:phase.label==='Exhala'?14:18}
-            fill="hsl(var(--primary))" fillOpacity="0.15" stroke="hsl(var(--primary))" strokeWidth="1.5" />
-          <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="middle"
-            fontSize="10" fill="hsl(var(--primary))" fontWeight="bold">{phase.label}</text>
+
+          {/* Side labels */}
+          {sideLabels.map(l => (
+            <text key={l.idx} x={l.x} y={l.y} textAnchor={l.anchor} dominantBaseline="middle"
+              fontSize="8" fontWeight={l.idx === phaseIdx ? 'bold' : 'normal'}
+              fill={l.idx === phaseIdx ? PHASE_COLORS[l.idx] : 'hsl(var(--muted-foreground))'}>
+              {l.label}
+            </text>
+          ))}
+
           {/* Moving dot */}
-          <circle cx={px} cy={py} r="6" fill="hsl(var(--primary))" />
-          <circle cx={px} cy={py} r="10" fill="hsl(var(--primary))" fillOpacity="0.3" />
+          <circle cx={px} cy={py} r="12" fill={color} fillOpacity="0.2" />
+          <circle cx={px} cy={py} r="7" fill={color}
+            style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
         </svg>
 
-        <div className="flex justify-center gap-1.5">
-          {Array.from({length: totalCycles}, (_, i) => (
-            <div key={i} className={`w-2.5 h-2.5 rounded-full border transition-all ${i < cycles ? 'bg-green-500 border-green-500' : 'border-border'}`} />
+        {/* Cycle progress */}
+        <div className="flex justify-center gap-2 mb-5">
+          {Array.from({ length: totalCycles }, (_, i) => (
+            <div key={i} className={`h-2.5 rounded-full transition-all duration-500 ${
+              i < cycles ? 'w-6 bg-green-500' : i === cycles ? 'w-2.5 border-2 border-primary bg-primary/20' : 'w-2.5 border border-border bg-transparent'
+            }`} />
           ))}
         </div>
+
         {cycles >= totalCycles ? (
           <div className="space-y-3">
-            <p className="text-green-400 text-sm font-medium">Lo lograste. Tu sistema nervioso te lo agradece.</p>
-            <Button onClick={onClose} className="w-full">Terminar</Button>
+            <p className="text-green-400 text-sm font-medium">✨ Lo lograste. Tu sistema nervioso te lo agradece.</p>
+            <Button onClick={onClose} className="w-full rounded-xl">Terminar</Button>
           </div>
         ) : (
-          <Button variant="outline" onClick={() => setRunning(r => !r)}>{running ? 'Pausar' : 'Reanudar'}</Button>
+          <Button variant="outline" onClick={() => setRunning(r => !r)} className="w-full rounded-xl">
+            {running ? '⏸ Pausar' : '▶ Reanudar'}
+          </Button>
         )}
       </motion.div>
     </div>
@@ -202,7 +253,6 @@ Responde de forma cálida y asertiva en máximo 3 oraciones. Si ofreces opciones
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="bg-card border border-border rounded-2xl w-full max-w-md flex flex-col" style={{ height: '70vh' }}>
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🐥</span>
@@ -210,8 +260,6 @@ Responde de forma cálida y asertiva en máximo 3 oraciones. Si ofreces opciones
           </div>
           <button onClick={onClose}><X className="h-5 w-5 text-muted-foreground" /></button>
         </div>
-
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -229,15 +277,11 @@ Responde de forma cálida y asertiva en máximo 3 oraciones. Si ofreces opciones
           )}
           <div ref={bottomRef} />
         </div>
-
-        {/* Quick actions */}
         <div className="px-4 pb-2 flex gap-1.5 flex-wrap">
           {quickActions.map(a => (
             <button key={a} onClick={() => { setInput(a); }} className="text-xs bg-muted px-2.5 py-1 rounded-full hover:bg-primary/10 transition-colors">{a}</button>
           ))}
         </div>
-
-        {/* Input */}
         <div className="p-4 border-t border-border flex gap-2">
           <input value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
@@ -296,13 +340,6 @@ function EmergencyMode({ onClose }) {
   );
 }
 
-// Meditation scenes
-const SCENES = [
-  { id: 'forest', emoji: '🌲', name: 'Bosque tranquilo', text: ['Estás en un bosque fresco y tranquilo.', 'Escuchas el suave crujido de hojas bajo tus pies.', 'Una brisa suave mueve las ramas a tu alrededor.', 'Respira profundo. Hueles musgo y tierra húmeda.', 'Este lugar es tuyo. Siempre puedes volver aquí.'] },
-  { id: 'river', emoji: '🏞️', name: 'Orilla del río', text: ['Estás junto a un río cristalino.', 'El agua murmura suavemente sobre las piedras.', 'Sientes el frescor del ambiente en tu piel.', 'Con cada respiración, sueltas lo que no necesitas.', 'Puedo volver a esta calma cuando lo necesite.'] },
-  { id: 'sunset', emoji: '🌅', name: 'Prado al atardecer', text: ['Un prado dorado se extiende ante ti.', 'La luz ámbar del atardecer lo ilumina todo.', 'Una brisa cálida roza tu rostro.', 'Inhala la calidez. Exhala la tensión.', 'Llevas esta calma contigo.'] },
-];
-
 export default function Wellbeing() {
   const { profile } = useOutletContext();
   const [activeTab, setActiveTab] = useState('checkin');
@@ -317,8 +354,6 @@ export default function Wellbeing() {
   const [cogLoad, setCogLoad] = useState(null);
   const [diaryEntries, setDiaryEntries] = useState([]);
   const [savingDiary, setSavingDiary] = useState(false);
-  const [meditationScene, setMeditationScene] = useState(null);
-  const [bodyZone, setBodyZone] = useState(0);
 
   useEffect(() => {
     if (profile) loadDiary();
@@ -351,20 +386,7 @@ export default function Wellbeing() {
   const tabs = [
     { id: 'checkin', emoji: '💭', label: 'Chequeo' },
     { id: 'breathe', emoji: '🌬️', label: 'Respiración' },
-    { id: 'meditate', emoji: '🧘', label: 'Meditar' },
     { id: 'diary', emoji: '📔', label: 'Diario' },
-    { id: 'bodyscan', emoji: '🫀', label: 'Body Scan' },
-  ];
-
-  const bodyZones = [
-    { name: 'Cabeza y rostro', guide: 'Lleva tu atención a la cabeza. Nota si hay tensión en la frente o mandíbula. Con la próxima exhalación, deja que se suavice.' },
-    { name: 'Cuello y garganta', guide: 'Observa tu cuello. ¿Está rígido? Imagina que cada exhalación libera esa tensión acumulada.' },
-    { name: 'Hombros', guide: 'Lleva tu atención a los hombros. Nota si los tienes levantados. Con la próxima exhalación, déjalos caer.' },
-    { name: 'Pecho', guide: 'Siente tu pecho expandirse y contraerse. No necesitas cambiar nada. Solo observa.' },
-    { name: 'Abdomen', guide: 'Nota el movimiento de tu abdomen. Cada respiración es un recordatorio de que estás aquí, presente.' },
-    { name: 'Caderas y zona lumbar', guide: 'Observa la zona lumbar. Si hay incomodidad, no la combatas. Simplemente reconócela.' },
-    { name: 'Piernas', guide: 'Dirige tu atención a las piernas. Nota el peso, la temperatura, la presión del asiento.' },
-    { name: 'Pies', guide: 'Finalmente, lleva tu atención a los pies. Siente el contacto con el suelo. Estás apoyado/a.' },
   ];
 
   return (
@@ -438,7 +460,7 @@ export default function Wellbeing() {
                     <p className="text-sm text-muted-foreground">Comencemos con algo más sencillo hoy. Cada intento cuenta.</p>
                   )}
                   {selectedEmotion.id === 'tired' && (
-                    <p className="text-sm text-muted-foreground">Reconoce tu cuerpo. Quizás una pausa corta o el body scan te ayude.</p>
+                    <p className="text-sm text-muted-foreground">Reconoce tu cuerpo. Una pausa corta puede marcar la diferencia.</p>
                   )}
                   <Button size="sm" variant="outline" onClick={() => setShowWillie(true)}>Hablar con WILLIE sobre esto</Button>
                 </motion.div>
@@ -465,42 +487,6 @@ export default function Wellbeing() {
                   <Button size="sm" onClick={t.action}>Iniciar</Button>
                 </div>
               ))}
-            </div>
-          )}
-
-          {activeTab === 'meditate' && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-lg">🧘 Visualizaciones Guiadas</h2>
-              <p className="text-sm text-muted-foreground">Elige una escena y cierra los ojos. Deja que cada palabra te lleve allí.</p>
-              {!meditationScene ? (
-                <div className="grid gap-3">
-                  {SCENES.map(s => (
-                    <button key={s.id} onClick={() => setMeditationScene(s)}
-                      className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary transition-all flex items-center gap-4">
-                      <span className="text-4xl">{s.emoji}</span>
-                      <div>
-                        <p className="font-semibold">{s.name}</p>
-                        <p className="text-xs text-muted-foreground">~5 minutos · Lectura guiada</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-card border border-border rounded-xl p-6 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold flex items-center gap-2"><span className="text-2xl">{meditationScene.emoji}</span>{meditationScene.name}</h3>
-                    <Button variant="ghost" size="sm" onClick={() => setMeditationScene(null)}>← Volver</Button>
-                  </div>
-                  <div className="space-y-4">
-                    {meditationScene.text.map((line, i) => (
-                      <motion.p key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.5 }}
-                        className={`text-sm leading-relaxed ${i === meditationScene.text.length-1 ? 'text-primary italic font-medium' : 'text-muted-foreground'}`}>
-                        {line}
-                      </motion.p>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -542,7 +528,6 @@ export default function Wellbeing() {
                 </Button>
               </div>
 
-              {/* Past entries */}
               {diaryEntries.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-medium text-sm">Entradas recientes</h3>
@@ -558,37 +543,6 @@ export default function Wellbeing() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'bodyscan' && (
-            <div className="bg-card border border-border rounded-xl p-6 space-y-5">
-              <h2 className="font-semibold text-lg">🫀 Body Scan</h2>
-              <p className="text-sm text-muted-foreground">Viaje de atención por tu cuerpo, de la cabeza a los pies.</p>
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${((bodyZone) / bodyZones.length) * 100}%` }} />
-              </div>
-              <p className="text-xs text-muted-foreground">{bodyZone}/{bodyZones.length} zonas</p>
-              {bodyZone < bodyZones.length ? (
-                <motion.div key={bodyZone} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                  className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center font-bold text-primary">{bodyZone + 1}</div>
-                    <h3 className="font-semibold">{bodyZones[bodyZone].name}</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{bodyZones[bodyZone].guide}</p>
-                  <Button className="w-full" onClick={() => setBodyZone(z => z + 1)}>
-                    {bodyZone < bodyZones.length - 1 ? 'Siguiente zona →' : 'Finalizar recorrido'}
-                  </Button>
-                </motion.div>
-              ) : (
-                <div className="text-center space-y-3">
-                  <p className="text-4xl">✨</p>
-                  <p className="font-medium">Has recorrido tu cuerpo completo.</p>
-                  <p className="text-sm text-muted-foreground italic">"Tómate un momento para sentirlo todo al mismo tiempo."</p>
-                  <Button variant="outline" onClick={() => setBodyZone(0)}>Repetir body scan</Button>
                 </div>
               )}
             </div>
