@@ -228,37 +228,41 @@ export default function Analytics() {
       console.warn('[Analytics] profile.user_id no disponible:', profile);
       return;
     }
-    setLoading(true);
-    console.log('[Analytics] Cargando datos para user_id:', profile.user_id);
-    Promise.all([
-      base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 500),
-      base44.entities.Question.list('-created_date', 5000),
-    ])
-      .then(([sess, qs]) => {
-        const sessArr = sess ?? [];
-        const qsArr = qs ?? [];
-        console.log('[Analytics] Sesiones cargadas:', sessArr.length);
-        console.log('[Analytics] Preguntas cargadas:', qsArr.length);
-        const withLog = sessArr.filter(s => Array.isArray(s.answers_log) && s.answers_log.length > 0);
-        console.log('[Analytics] Sesiones con answers_log:', withLog.length);
-        if (sessArr.length > 0) {
-          console.log('[Analytics] Tipos de sesión en DB:', [...new Set(sessArr.map(s => s.session_type))]);
-          console.log('[Analytics] Primera sesión (sample):', sessArr[0]);
-        }
-        if (withLog.length > 0) {
-          console.log('[Analytics] Primera respuesta (sample):', withLog[0].answers_log[0]);
-        }
-        setSessions(sessArr);
-        const map = {};
-        qsArr.forEach(q => { if (q.id) map[String(q.id)] = q; });
-        setQuestionMap(map);
-      })
-      .catch(err => {
-        console.error('[Analytics] Error cargando datos:', err);
-        setError(err?.message || 'Error al cargar datos');
-      })
-      .finally(() => setLoading(false));
-  }, [profile?.user_id]);
+
+    const loadData = () => {
+      setLoading(true);
+      console.log('[Analytics] Cargando datos para user_id:', profile.user_id);
+      Promise.all([
+        base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 500),
+        base44.entities.Question.list('-created_date', 5000),
+      ])
+        .then(([sess, qs]) => {
+          const sessArr = sess ?? [];
+          const qsArr = qs ?? [];
+          console.log('[Analytics] Sesiones cargadas:', sessArr.length);
+          console.log('[Analytics] Preguntas cargadas:', qsArr.length);
+          const withLog = sessArr.filter(s => Array.isArray(s.answers_log) && s.answers_log.length > 0);
+          console.log('[Analytics] Sesiones con answers_log:', withLog.length);
+          if (sessArr.length > 0) {
+            console.log('[Analytics] Tipos de sesión en DB:', [...new Set(sessArr.map(s => s.session_type))]);
+          }
+          setSessions(sessArr);
+          const map = {};
+          qsArr.forEach(q => { if (q.id) map[String(q.id)] = q; });
+          setQuestionMap(map);
+        })
+        .catch(err => {
+          console.error('[Analytics] Error cargando datos:', err);
+          setError(err?.message || 'Error al cargar datos');
+        })
+        .finally(() => setLoading(false));
+    };
+
+    loadData();
+    // Auto-refresh whenever a study session is added/updated
+    const unsub = base44.entities.StudySession.subscribe(() => loadData());
+    return unsub;
+  }, [profile?.user_id]); // eslint-disable-line
 
   // ── All individual answers, enriched with session reference ──
   const allAnswers = useMemo(() =>
