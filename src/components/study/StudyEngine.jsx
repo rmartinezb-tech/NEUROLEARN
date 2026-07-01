@@ -228,9 +228,10 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     }
   };
 
-  const handleFinish = async () => {
+  const handleFinish = async (reflectionNote = '') => {
     const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
     const duration = Math.round((Date.now() - stats.startTime) / 60000);
+    console.log('[StudyEngine] Guardando sesión:', { sessionType, total: stats.total, correct: stats.correct, answersLog: stats.answers.length });
     await base44.entities.StudySession.create({
       user_id: profile.user_id,
       session_type: sessionType,
@@ -244,7 +245,9 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
       completed_at: new Date().toISOString(),
       answers_log: stats.answers,
       is_interleaved: interleaved,
+      reflection_note: reflectionNote || null,
     });
+    console.log('[StudyEngine] Sesión guardada. Actualizando perfil...');
     const newXp = (profile.xp || 0) + stats.xp;
     let level = profile.level || 1;
     while (level < 50 && newXp >= level * 100) level++;
@@ -262,6 +265,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
     };
     if (interleaved) updates.interleaved_sessions = (profile.interleaved_sessions || 0) + 1;
     await base44.entities.UserProfile.update(profile.id, updates);
+    console.log('[StudyEngine] Perfil actualizado.');
   };
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;

@@ -165,8 +165,8 @@ function ChartTip({ active, payload, label }) {
 // DIAGNOSTIC BANNER
 // ─────────────────────────────────────────────
 function DiagBanner({ sessions, totalAnswers, totalQuestions, questionsWithSubject, questionsWithSkill }) {
-  const [open, setOpen] = useState(false);
   const ok = totalAnswers > 0;
+  const [open, setOpen] = useState(!ok); // auto-expand when no data
   return (
     <div className={`border rounded-xl text-xs overflow-hidden transition-all ${ok ? 'border-green-500/30 bg-green-500/5' : 'border-yellow-500/30 bg-yellow-500/5'}`}>
       <button className="w-full flex items-center gap-2 px-4 py-2.5 text-left" onClick={() => setOpen(o => !o)}>
@@ -190,9 +190,19 @@ function DiagBanner({ sessions, totalAnswers, totalQuestions, questionsWithSubje
               <div><span className="font-semibold text-foreground">{totalQuestions.toLocaleString()}</span> preguntas en banco</div>
               <div><span className="font-semibold text-foreground">{questionsWithSubject}</span> preguntas con materia</div>
               <div><span className="font-semibold text-foreground">{questionsWithSkill}</span> preguntas con hab. cognitiva</div>
-              {!ok && (
-                <div className="col-span-2 sm:col-span-4 mt-1 text-yellow-700 dark:text-yellow-400 font-medium">
-                  ⚠️ Completá nuevas sesiones de estudio para ver datos en los gráficos. Si el problema persiste, verificá que hayas ejecutado la migración SQL en Supabase Dashboard.
+              {sessions === 0 && (
+                <div className="col-span-2 sm:col-span-4 mt-2 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 text-[11px] space-y-1">
+                  <p className="font-semibold">🔍 ¿Por qué no hay datos?</p>
+                  <p>No se encontraron sesiones guardadas para tu usuario. Las sesiones de tipo <strong>Materia Única</strong>, <strong>Por Dificultad</strong> y <strong>Habilidades Cognitivas</strong> no se guardaban antes de ejecutar la migración SQL.</p>
+                  <p>✅ <strong>Solución:</strong> Completá una nueva sesión de estudio — ahora sí se guardará correctamente.</p>
+                  <p className="opacity-70">Abrí la consola del navegador (F12 → Console) para ver los logs de diagnóstico <code>[Analytics]</code>.</p>
+                </div>
+              )}
+              {sessions > 0 && !ok && (
+                <div className="col-span-2 sm:col-span-4 mt-2 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-400 text-[11px] space-y-1">
+                  <p className="font-semibold">📋 Hay {sessions} sesiones pero sin respuestas individuales registradas.</p>
+                  <p>Estas sesiones fueron guardadas antes de que el sistema registrara respuestas por pregunta. <strong>Completá nuevas sesiones</strong> para poblar el dashboard.</p>
+                  <p className="opacity-70">Abrí la consola (F12 → Console) para ver los logs <code>[Analytics]</code>.</p>
                 </div>
               )}
             </div>
@@ -214,20 +224,39 @@ export default function Analytics() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!profile?.user_id) return;
+    if (!profile?.user_id) {
+      console.warn('[Analytics] profile.user_id no disponible:', profile);
+      return;
+    }
     setLoading(true);
+    console.log('[Analytics] Cargando datos para user_id:', profile.user_id);
     Promise.all([
       base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 500),
       base44.entities.Question.list('-created_date', 5000),
     ])
       .then(([sess, qs]) => {
-        setSessions(sess ?? []);
-        // Build map: id → question. Keep both id formats (UUID might differ by DB version).
+        const sessArr = sess ?? [];
+        const qsArr = qs ?? [];
+        console.log('[Analytics] Sesiones cargadas:', sessArr.length);
+        console.log('[Analytics] Preguntas cargadas:', qsArr.length);
+        const withLog = sessArr.filter(s => Array.isArray(s.answers_log) && s.answers_log.length > 0);
+        console.log('[Analytics] Sesiones con answers_log:', withLog.length);
+        if (sessArr.length > 0) {
+          console.log('[Analytics] Tipos de sesión en DB:', [...new Set(sessArr.map(s => s.session_type))]);
+          console.log('[Analytics] Primera sesión (sample):', sessArr[0]);
+        }
+        if (withLog.length > 0) {
+          console.log('[Analytics] Primera respuesta (sample):', withLog[0].answers_log[0]);
+        }
+        setSessions(sessArr);
         const map = {};
-        (qs ?? []).forEach(q => { if (q.id) map[String(q.id)] = q; });
+        qsArr.forEach(q => { if (q.id) map[String(q.id)] = q; });
         setQuestionMap(map);
       })
-      .catch(err => setError(err?.message || 'Error al cargar datos'))
+      .catch(err => {
+        console.error('[Analytics] Error cargando datos:', err);
+        setError(err?.message || 'Error al cargar datos');
+      })
       .finally(() => setLoading(false));
   }, [profile?.user_id]);
 
