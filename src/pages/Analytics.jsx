@@ -580,23 +580,20 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* ── DONUTS BY QUESTION TYPE ── */}
+      {/* ── DONUTS: tipo de pregunta + habilidad cognitiva (uno debajo del otro) ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="font-semibold text-sm">🍩 Tasa de Aciertos por Tipo de Pregunta</h3>
         <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-          % de respuestas correctas para cada formato de pregunta · Acumulado de todas las sesiones
+          % de respuestas correctas para cada formato · Acumulado de todas las sesiones
         </p>
         {!hasAnswers ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">
-            <p className="text-2xl mb-2">🍩</p>
-            Completá sesiones de estudio para ver las donuts por tipo de pregunta.
-          </div>
+          <p className="text-center text-muted-foreground py-6 text-sm">
+            Completá sesiones de estudio para ver las donuts.
+          </p>
         ) : typeDonutData.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">
-            <p className="text-2xl mb-2">🍩</p>
-            Hay respuestas pero no se pudo cruzar con tipos de preguntas.
-            Verificá que las preguntas del banco tengan el campo <strong>tipo</strong> asignado.
-          </div>
+          <p className="text-center text-muted-foreground py-6 text-sm">
+            Hay respuestas pero las preguntas no tienen tipo asignado en el banco.
+          </p>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
             {typeDonutData.map((d, i) => (
@@ -607,7 +604,83 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* ── Evocation detail card ── */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h3 className="font-semibold text-sm">🎯 Tasa de Aciertos por Habilidad Cognitiva</h3>
+        <p className="text-xs text-muted-foreground mt-0.5 mb-4">
+          Solo habilidades con preguntas respondidas · % = correctas / total de esa habilidad
+        </p>
+        {skillDonutData.length === 0 ? (
+          <div className="py-6 text-center space-y-1">
+            <p className="text-muted-foreground text-sm">Sin datos de habilidades cognitivas aún.</p>
+            <p className="text-xs text-muted-foreground/60">
+              Asigná habilidades cognitivas a las preguntas en el Banco de Preguntas y completá sesiones.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+            {skillDonutData.map((d, i) => (
+              <MiniDonut key={d.skill} label={d.skill} accuracy={d.accuracy}
+                total={d.total} color={d.color} index={i} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── HEATMAPS: tipo de pregunta + habilidad cognitiva (uno debajo del otro) ── */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h3 className="font-semibold text-sm">🔥 Heatmap: Tasa de Error · Materia × Tipo de Pregunta</h3>
+        <p className="text-xs text-muted-foreground mt-0.5 mb-4">
+          Acumulado de <strong>todas las sesiones</strong> ·{' '}
+          <span className="text-emerald-600 font-medium">Verde</span> = pocos errores ·{' '}
+          <span className="text-red-600 font-medium">Rojo</span> = muchos errores ·{' '}
+          <span className="text-muted-foreground font-medium">—</span> = sin datos
+        </p>
+        {!hasAnswers ? (
+          <p className="text-center text-muted-foreground py-6 text-sm">
+            Sin datos. El heatmap se activa al completar sesiones.
+          </p>
+        ) : (
+          <>
+            <HeatmapTable
+              rows={SUBJECTS}
+              cols={TYPES}
+              getData={(subj, type) => heatmap1[subj]?.[type] ?? -1}
+              colLabels={TYPE_SHORT}
+              rowLabels={SUBJ_SHORT}
+            />
+            {SUBJECTS.every(s => TYPES.every(t => (heatmap1[s]?.[t] ?? -1) < 0)) && (
+              <p className="text-center text-xs text-amber-600 mt-3">
+                ⚠️ Hay respuestas pero las preguntas no tienen materia/tipo asignados en el banco.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h3 className="font-semibold text-sm">🧩 Heatmap: Tasa de Error · Materia × Habilidad Cognitiva</h3>
+        <p className="text-xs text-muted-foreground mt-0.5 mb-4">
+          Acumulado de todas las sesiones · Solo muestra habilidades con preguntas respondidas
+        </p>
+        {activeSkills.length === 0 ? (
+          <div className="py-6 text-center space-y-1">
+            <p className="text-muted-foreground text-sm">Sin datos de habilidades cognitivas aún.</p>
+            <p className="text-xs text-muted-foreground/60">
+              Asigná habilidades a las preguntas en el Banco de Preguntas, luego completá sesiones.
+            </p>
+          </div>
+        ) : (
+          <HeatmapTable
+            rows={SUBJECTS}
+            cols={activeSkills}
+            getData={(subj, skill) => heatmap2[subj]?.[skill] ?? -1}
+            colLabels={SKILL_SHORT}
+            rowLabels={SUBJ_SHORT}
+          />
+        )}
+      </div>
+
+      {/* ── Evocation detail card (justo antes de curva del olvido) ── */}
       <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-2xl p-5">
         <h3 className="font-semibold text-sm mb-2">🧠 Detalle de Evocación</h3>
         <p className="text-xs text-muted-foreground mb-4">
@@ -637,78 +710,6 @@ export default function Analytics() {
           </p>
         )}
       </div>
-
-      {/* ── Heatmap 1: Subject × Type ── */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h3 className="font-semibold text-sm">🔥 Heatmap: Tasa de Error · Materia × Tipo de Pregunta</h3>
-        <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-          Acumulado de <strong>todas las sesiones</strong>.{' '}
-          <span className="text-emerald-600 font-medium">Verde</span> = pocos errores ·{' '}
-          <span className="text-red-600 font-medium">Rojo</span> = muchos errores ·{' '}
-          <span className="text-muted-foreground font-medium">—</span> = sin datos
-        </p>
-        {!hasAnswers ? (
-          <p className="text-center text-muted-foreground py-8 text-sm">
-            Sin datos de sesiones. El heatmap se activará al completar sesiones de estudio.
-          </p>
-        ) : (
-          <>
-            <HeatmapTable
-              rows={SUBJECTS}
-              cols={TYPES}
-              getData={(subj, type) => heatmap1[subj]?.[type] ?? -1}
-              colLabels={TYPE_SHORT}
-              rowLabels={SUBJ_SHORT}
-            />
-            {SUBJECTS.every(s => TYPES.every(t => (heatmap1[s]?.[t] ?? -1) < 0)) && (
-              <p className="text-center text-xs text-amber-600 mt-3">
-                ⚠️ Hay respuestas registradas pero las preguntas no tienen materia y/o tipo asignados en el banco.
-              </p>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* ── Heatmap 2: Subject × Cognitive Skill ── */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h3 className="font-semibold text-sm">🧩 Heatmap: Tasa de Error · Materia × Habilidad Cognitiva</h3>
-        <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-          Acumulado de todas las sesiones · Solo muestra habilidades cognitivas con preguntas respondidas.
-        </p>
-        {activeSkills.length === 0 ? (
-          <div className="py-8 text-center space-y-1.5">
-            <p className="text-muted-foreground text-sm">Sin datos de habilidades cognitivas aún.</p>
-            <p className="text-xs text-muted-foreground/70">
-              Asigná habilidades cognitivas a las preguntas en el Banco de Preguntas,
-              luego respondé sesiones para ver este heatmap.
-            </p>
-          </div>
-        ) : (
-          <HeatmapTable
-            rows={SUBJECTS}
-            cols={activeSkills}
-            getData={(subj, skill) => heatmap2[subj]?.[skill] ?? -1}
-            colLabels={SKILL_SHORT}
-            rowLabels={SUBJ_SHORT}
-          />
-        )}
-      </div>
-
-      {/* ── Donuts by cognitive skill (only when data exists) ── */}
-      {skillDonutData.length > 0 && (
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <h3 className="font-semibold text-sm">🎯 Tasa de Aciertos por Habilidad Cognitiva</h3>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-            Solo habilidades con preguntas respondidas · % = correctas / total de esa habilidad
-          </p>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
-            {skillDonutData.map((d, i) => (
-              <MiniDonut key={d.skill} label={d.skill} accuracy={d.accuracy}
-                total={d.total} color={d.color} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Forgetting curve ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
