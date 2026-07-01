@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Send, RotateCcw, Brain } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AIDisclaimerButton from '@/components/questions/AIDisclaimerButton';
 
 const SUBJECT_SUGGESTIONS = ['Neurociencias', 'Ciencias Biomédicas', 'IA en Salud', 'Cuidados en Salud', 'Identidad Personal', 'Laboratorio', 'Taller de Arte'];
 const QUICK_PROMPTS = [
@@ -157,7 +158,52 @@ Responde como WILLIE de forma cálida y pedagógica. Si es una pregunta de estud
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <AIDisclaimerButton
+            size="sm"
+            buttonLabel="Aviso IA"
+            title="Sobre WILLIE y sus límites"
+          >
+            <div className="space-y-4 text-sm text-foreground/90 leading-relaxed">
+              <p>
+                WILLIE es un asistente educativo impulsado por Inteligencia Artificial, diseñado
+                para ayudarte a estudiar y repasar contenidos académicos. Aunque se esfuerza por
+                entregar explicaciones claras y preguntas útiles,{' '}
+                <strong>puede cometer errores</strong>, simplificar conceptos en exceso, o
+                proporcionar información desactualizada o incompleta.
+              </p>
+
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300/60 rounded-xl p-4">
+                <p className="font-semibold text-amber-700 dark:text-amber-400 mb-1">
+                  No uses las respuestas de WILLIE como fuente única de información.
+                </p>
+                <p className="text-amber-700/80 dark:text-amber-400/80 text-xs">
+                  Verifica siempre el contenido con tus apuntes, libros de texto, guías clínicas
+                  o con tu docente. En especial en temas de salud, una respuesta incorrecta puede
+                  generar confusión o reforzar conceptos equivocados.
+                </p>
+              </div>
+
+              <p>
+                WILLIE <strong>no es un profesional de la salud</strong> y sus respuestas no
+                constituyen consejo médico, diagnóstico ni tratamiento. Ante cualquier duda clínica
+                real, consulta siempre a un profesional calificado.
+              </p>
+
+              <p>
+                El desarrollador de la plataforma no se hace responsable por errores, imprecisiones
+                ni las consecuencias derivadas de confiar exclusivamente en las respuestas de WILLIE.
+              </p>
+
+              <div className="border-t border-border pt-4">
+                <p className="text-muted-foreground italic text-xs">
+                  WILLIE es una herramienta de apoyo al aprendizaje, no un reemplazo del estudio
+                  riguroso ni del juicio académico. Úsalo para practicar, explorar ideas y repasar
+                  contenidos — pero siempre con pensamiento crítico.
+                </p>
+              </div>
+            </div>
+          </AIDisclaimerButton>
           <Button variant="ghost" size="icon" onClick={resetChat} title="Nueva conversación"><RotateCcw className="h-4 w-4" /></Button>
           <div className="flex items-center gap-2">
             <Label className="text-xs">Activo</Label>
