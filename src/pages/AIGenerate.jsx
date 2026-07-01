@@ -25,6 +25,8 @@ export default function AIGenerate() {
   const [generated, setGenerated] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
   const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
 
   const isAdminOrMentor = user?.role === 'admin' || user?.role === 'mentor';
@@ -62,6 +64,29 @@ export default function AIGenerate() {
   const selectedEntries = Object.entries(typeCounts).filter(([, v]) => v > 0);
 
   const typeLabel = (t) => QTYPES.find(q => q.v === t)?.l || t;
+
+  const startEdit = (idx) => {
+    const q = generated[idx];
+    setEditDraft({
+      statement: q.statement || '',
+      correct_answer: q.correct_answer || '',
+      options: Array.isArray(q.options) ? q.options.join('\n') : (q.options || ''),
+      explanation: q.explanation || '',
+      type: q.type,
+    });
+    setEditingIdx(idx);
+  };
+
+  const saveEdit = (idx) => {
+    setGenerated(prev => prev.map((q, i) => i !== idx ? q : {
+      ...q,
+      statement: editDraft.statement,
+      correct_answer: editDraft.correct_answer,
+      options: editDraft.options ? editDraft.options.split('\n').map(s => s.trim()).filter(Boolean) : [],
+      explanation: editDraft.explanation,
+    }));
+    setEditingIdx(null);
+  };
 
   const generate = async () => {
     if (!text.trim()) { toast.error('Pega texto para generar preguntas'); return; }
@@ -298,49 +323,85 @@ export default function AIGenerate() {
 
           {generated.map((q, i) => (
             <div key={i} className="bg-card border border-border rounded-xl p-4">
+              {/* Tags row */}
               <div className="flex items-start justify-between mb-2 gap-2">
                 <div className="flex gap-1.5 flex-wrap">
                   <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">{typeLabel(q.type)}</span>
-                  {q.cognitive_skill && (
-                    <span className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-1 rounded-full">{q.cognitive_skill}</span>
-                  )}
+                  {q.cognitive_skill && <span className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-1 rounded-full">{q.cognitive_skill}</span>}
                   <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">{q.subject}</span>
-                  {q.difficulty_suggested && (
-                    <span className="text-xs bg-orange-500/10 text-orange-600 px-2 py-1 rounded-full">Dif. {q.difficulty_suggested}</span>
-                  )}
+                  {q.difficulty_suggested && <span className="text-xs bg-orange-500/10 text-orange-600 px-2 py-1 rounded-full">Dif. {q.difficulty_suggested}</span>}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => regenerateOne(i)} className="h-7 shrink-0">
-                  <RotateCcw className="h-3 w-3 mr-1" />Regenerar
-                </Button>
+                <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => startEdit(i)} className="h-7 text-xs">✏️ Editar</Button>
+                  <Button variant="ghost" size="sm" onClick={() => regenerateOne(i)} className="h-7 text-xs">
+                    <RotateCcw className="h-3 w-3 mr-1" />Regenerar
+                  </Button>
+                </div>
               </div>
 
-              <p className="font-medium text-sm">{q.statement}</p>
-
-              {q.options?.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {q.options.map((opt, j) => (
-                    <div
-                      key={j}
-                      className={`text-xs p-2 rounded-lg ${
-                        opt === q.correct_answer
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 font-medium'
-                          : 'bg-muted/50'
-                      }`}
-                    >
-                      {String.fromCharCode(65 + j)}. {opt}
+              {editingIdx === i ? (
+                /* ── Inline edit form ── */
+                <div className="space-y-3 mt-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Enunciado</p>
+                    <textarea
+                      value={editDraft.statement}
+                      onChange={e => setEditDraft(d => ({ ...d, statement: e.target.value }))}
+                      className="w-full bg-muted rounded-lg p-2 text-sm resize-none border border-border focus:outline-none focus:border-primary min-h-[60px]"
+                    />
+                  </div>
+                  {['multiple_choice','true_false','order_sequence','matching'].includes(q.type) && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Opciones (una por línea)</p>
+                      <textarea
+                        value={editDraft.options}
+                        onChange={e => setEditDraft(d => ({ ...d, options: e.target.value }))}
+                        placeholder="Opción 1&#10;Opción 2&#10;Opción 3"
+                        className="w-full bg-muted rounded-lg p-2 text-sm resize-none border border-border focus:outline-none focus:border-primary min-h-[80px] font-mono"
+                      />
                     </div>
-                  ))}
+                  )}
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Respuesta correcta</p>
+                    <input
+                      value={editDraft.correct_answer}
+                      onChange={e => setEditDraft(d => ({ ...d, correct_answer: e.target.value }))}
+                      className="w-full bg-muted rounded-lg p-2 text-sm border border-border focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Explicación</p>
+                    <textarea
+                      value={editDraft.explanation}
+                      onChange={e => setEditDraft(d => ({ ...d, explanation: e.target.value }))}
+                      className="w-full bg-muted rounded-lg p-2 text-sm resize-none border border-border focus:outline-none focus:border-primary min-h-[50px]"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => saveEdit(i)} className="flex-1">Guardar cambios</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingIdx(null)} className="flex-1">Cancelar</Button>
+                  </div>
                 </div>
-              )}
-
-              {q.correct_answer && !q.options?.length && (
-                <p className="text-xs mt-2 bg-green-500/10 text-green-700 dark:text-green-400 p-2 rounded-lg">
-                  <span className="font-medium">Respuesta: </span>{q.correct_answer}
-                </p>
-              )}
-
-              {q.explanation && (
-                <p className="text-xs text-muted-foreground mt-2">💡 {q.explanation}</p>
+              ) : (
+                /* ── View mode ── */
+                <>
+                  <p className="font-medium text-sm">{q.statement}</p>
+                  {q.options?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {q.options.map((opt, j) => (
+                        <div key={j} className={`text-xs p-2 rounded-lg ${opt === q.correct_answer ? 'bg-green-500/10 text-green-700 dark:text-green-400 font-medium' : 'bg-muted/50'}`}>
+                          {String.fromCharCode(65 + j)}. {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {q.correct_answer && !q.options?.length && (
+                    <p className="text-xs mt-2 bg-green-500/10 text-green-700 dark:text-green-400 p-2 rounded-lg">
+                      <span className="font-medium">Respuesta: </span>{q.correct_answer}
+                    </p>
+                  )}
+                  {q.explanation && <p className="text-xs text-muted-foreground mt-2">💡 {q.explanation}</p>}
+                </>
               )}
             </div>
           ))}

@@ -42,8 +42,8 @@ export default function Dashboard() {
       if (!profile) return;
       const [recentSess, allSess, allQ] = await Promise.all([
         base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 10),
-        base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 500),
-        base44.entities.Question.list('-created_date', 5000),
+        base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 200),
+        base44.entities.Question.list('-created_date', 1000),
       ]);
       setSessions(recentSess);
       setAllSessions(allSess ?? []);

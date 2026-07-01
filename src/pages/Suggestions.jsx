@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Send, Check, Trash2, MessageSquare } from 'lucide-react';
+import { Send, Check, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import moment from 'moment';
 import { motion } from 'framer-motion';
@@ -71,13 +71,33 @@ export default function Suggestions() {
     load();
   };
 
+  const deleteSuggestion = async (s) => {
+    await base44.entities.Suggestion.delete(s.id);
+    toast.success('Sugerencia eliminada');
+    load();
+  };
+
+  const clearResolved = async () => {
+    const resolved = suggestions.filter(s => s.status === 'resolved');
+    await Promise.all(resolved.map(s => base44.entities.Suggestion.delete(s.id)));
+    toast.success(`${resolved.length} sugerencia${resolved.length !== 1 ? 's' : ''} eliminada${resolved.length !== 1 ? 's' : ''}`);
+    load();
+  };
+
   const statusColor = { pending: 'bg-yellow-500/10 text-yellow-500', replied: 'bg-green-500/10 text-green-500', resolved: 'bg-muted text-muted-foreground' };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-10">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold flex items-center gap-3">💭 Sugerencias</h1>
-        <p className="text-muted-foreground mt-1">Envía sugerencias privadas a los mentores y admin</p>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-3">💭 Sugerencias</h1>
+          <p className="text-muted-foreground mt-1">Envía sugerencias privadas a los mentores y admin</p>
+        </div>
+        {isAdminOrMentor && suggestions.some(s => s.status === 'resolved') && (
+          <Button variant="outline" size="sm" onClick={clearResolved} className="gap-2 text-red-500 border-red-400/40 hover:bg-red-500/10 shrink-0">
+            <Trash2 className="h-3.5 w-3.5" /> Borrar resueltas
+          </Button>
+        )}
       </motion.div>
 
       {/* Send new suggestion */}
@@ -140,9 +160,16 @@ export default function Suggestions() {
               )}
 
               {isAdminOrMentor && (
-                <Button size="sm" variant="outline" className="gap-2 text-green-500 border-green-500/30 hover:bg-green-500/10" onClick={() => resolve(s)}>
-                  <Check className="h-3 w-3" /> Marcar como resuelto
-                </Button>
+                <div className="flex gap-2">
+                  {s.status !== 'resolved' && (
+                    <Button size="sm" variant="outline" className="gap-2 text-green-500 border-green-500/30 hover:bg-green-500/10" onClick={() => resolve(s)}>
+                      <Check className="h-3 w-3" /> Marcar resuelto
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" className="gap-2 text-red-500 border-red-400/30 hover:bg-red-500/10" onClick={() => deleteSuggestion(s)}>
+                    <Trash2 className="h-3 w-3" /> Eliminar
+                  </Button>
+                </div>
               )}
             </div>
           ))}

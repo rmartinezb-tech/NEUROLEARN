@@ -34,11 +34,27 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
     return shuffleArr(question.options);
   }, [question.id]); // eslint-disable-line
 
+  // Effective items for order_sequence — native field OR fallback to options
+  const effectiveOrderItems = useMemo(() => {
+    if (question.type !== 'order_sequence') return [];
+    if (question.sequence_order?.length) return question.sequence_order;
+    return question.options || [];
+  }, [question.id]); // eslint-disable-line
+
+  // Correct sequence — native field OR parsed from correct_answer text
+  const correctSeq = useMemo(() => {
+    if (question.sequence_order?.length) return question.sequence_order;
+    if (question.correct_answer) {
+      const parsed = question.correct_answer.split(/[,→\n]/).map(s => s.trim()).filter(Boolean);
+      if (parsed.length > 1) return parsed;
+    }
+    return effectiveOrderItems;
+  }, [question.id]); // eslint-disable-line
+
   // Shuffled sequence for order_sequence
   const shuffledSeq = useMemo(() => {
-    if (!question.sequence_order) return [];
-    const shuffled = shuffleArr(question.sequence_order);
-    return shuffled;
+    if (!effectiveOrderItems.length) return [];
+    return shuffleArr(effectiveOrderItems);
   }, [question.id]); // eslint-disable-line
 
   // Init userOrder from shuffledSeq
@@ -46,10 +62,19 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
     if (question.type === 'order_sequence') setUserOrder(shuffledSeq);
   }, [question.id]); // eslint-disable-line
 
+  // Effective matching pairs — native field OR parsed from options "Left → Right"
+  const effectiveMatchingPairs = useMemo(() => {
+    if (question.matching_pairs?.length) return question.matching_pairs;
+    return (question.options || []).map(opt => {
+      const parts = opt.split(/→|–|-/).map(s => s.trim());
+      return { left: parts[0] || opt, right: parts[1] || '' };
+    }).filter(p => p.right);
+  }, [question.id]); // eslint-disable-line
+
   // Shuffled right column for matching
   const shuffledRight = useMemo(() => {
-    if (!question.matching_pairs) return [];
-    return shuffleArr(question.matching_pairs.map(p => p.right));
+    if (!effectiveMatchingPairs.length) return [];
+    return shuffleArr(effectiveMatchingPairs.map(p => p.right));
   }, [question.id]); // eslint-disable-line
 
   const handleMultipleChoice = (opt) => {
@@ -94,8 +119,7 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
   };
 
   const handleMatchSubmit = () => {
-    const pairs = question.matching_pairs || [];
-    const correct = pairs.every((p, i) => matchSelections[i] === p.right);
+    const correct = effectiveMatchingPairs.every((p, i) => matchSelections[i] === p.right);
     onAnswer(correct, JSON.stringify(matchSelections));
   };
 
@@ -168,12 +192,20 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
           </div>
         );
 
-      case 'order_sequence':
+      case 'order_sequence': {
+        if (!effectiveOrderItems.length) {
+          return (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-sm text-yellow-700 dark:text-yellow-400">
+              ⚠️ Esta pregunta no tiene ítems configurados. Editala en el Banco de Preguntas para agregar los pasos a ordenar.
+            </div>
+          );
+        }
+        const isOrderCorrect = userOrder?.join('|||') === correctSeq.join('|||');
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Ordena los elementos correctamente:</p>
             {(userOrder || shuffledSeq).map((item, i) => (
-              <div key={i} className={`flex items-center gap-2 p-3 rounded-xl border-2 ${answered ? (userOrder?.join('|||') === (question.sequence_order || []).join('|||') ? 'border-green-500 bg-green-500/10' : 'border-red-500/50 bg-red-500/5') : 'border-border bg-card'}`}>
+              <div key={i} className={`flex items-center gap-2 p-3 rounded-xl border-2 ${answered ? (isOrderCorrect ? 'border-green-500 bg-green-500/10' : 'border-red-500/50 bg-red-500/5') : 'border-border bg-card'}`}>
                 <span className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">{i + 1}</span>
                 <span className="flex-1 text-sm">{item}</span>
                 {!answered && (
@@ -184,18 +216,31 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
                 )}
               </div>
             ))}
-            {!answered && <Button onClick={handleOrderSubmit} className="w-full rounded-xl">Verificar orden</Button>}
+            {!answered && (
+              <Button onClick={() => {
+                const ok = (userOrder || []).join('|||') === correctSeq.join('|||');
+                onAnswer(ok, (userOrder || []).join(' → '));
+              }} className="w-full rounded-xl">Verificar orden</Button>
+            )}
             {answered && (
               <div className="bg-muted/50 rounded-xl p-3 text-xs">
                 <p className="font-medium mb-1">Orden correcto:</p>
-                <p>{(question.sequence_order || []).join(' → ')}</p>
+                <p>{correctSeq.join(' → ')}</p>
               </div>
             )}
           </div>
         );
+      }
 
       case 'matching': {
-        const pairs = question.matching_pairs || [];
+        const pairs = effectiveMatchingPairs;
+        if (!pairs.length) {
+          return (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-sm text-yellow-700 dark:text-yellow-400">
+              ⚠️ Esta pregunta no tiene pares configurados. Editala en el Banco de Preguntas para agregar los pares de matching.
+            </div>
+          );
+        }
         const allMatched = pairs.every((_, i) => matchSelections[i] !== undefined);
         return (
           <div className="space-y-3">
