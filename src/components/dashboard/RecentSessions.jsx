@@ -10,6 +10,7 @@ const typeLabels = {
   tournament: 'Torneo',
   single_subject: 'Materia Única',
   difficulty: 'Por Dificultad',
+  cognitive: 'Habilidad Cognitiva',
   cognitive_skill: 'Habilidad Cognitiva',
   flashcard_custom: 'Flashcards',
   flashcard: 'Flashcard',

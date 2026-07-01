@@ -13,7 +13,15 @@
         "selective",
         "express",
         "duel",
-        "tournament"
+        "tournament",
+        "single_subject",
+        "difficulty",
+        "cognitive",
+        "cognitive_skill",
+        "standard",
+        "custom",
+        "flashcard_custom",
+        "flashcard"
       ],
       "description": "Tipo de sesi\u00f3n"
     },

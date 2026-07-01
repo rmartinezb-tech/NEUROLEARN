@@ -193,8 +193,8 @@ function DiagBanner({ sessions, totalAnswers, totalQuestions, questionsWithSubje
               {sessions === 0 && (
                 <div className="col-span-2 sm:col-span-4 mt-2 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 text-[11px] space-y-1">
                   <p className="font-semibold">🔍 ¿Por qué no hay datos?</p>
-                  <p>No se encontraron sesiones guardadas para tu usuario. Las sesiones de tipo <strong>Materia Única</strong>, <strong>Por Dificultad</strong> y <strong>Habilidades Cognitivas</strong> no se guardaban antes de ejecutar la migración SQL.</p>
-                  <p>✅ <strong>Solución:</strong> Completá una nueva sesión de estudio — ahora sí se guardará correctamente.</p>
+                  <p>No se encontraron sesiones guardadas para tu usuario. Las sesiones de Flashcards, <strong>Materia Única</strong>, <strong>Por Dificultad</strong> y <strong>Habilidades Cognitivas</strong> requieren la migración 010 para guardarse correctamente.</p>
+                  <p>✅ <strong>Solución:</strong> Ejecutá la migración 010 en el SQL Editor de Supabase y luego completá una nueva sesión de estudio.</p>
                   <p className="opacity-70">Abrí la consola del navegador (F12 → Console) para ver los logs de diagnóstico <code>[Analytics]</code>.</p>
                 </div>
               )}

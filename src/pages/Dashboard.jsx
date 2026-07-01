@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [sessions, setSessions] = useState([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [questionMap, setQuestionMap] = useState({});
+  const [allSessions, setAllSessions] = useState([]);
 
   const refreshOnline = async () => {
     const profiles = await base44.entities.UserProfile.filter({ is_online: true });
@@ -38,12 +40,17 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       if (!profile) return;
-      const [sess] = await Promise.all([
+      const [recentSess, allSess, allQ] = await Promise.all([
         base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 10),
+        base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 500),
+        base44.entities.Question.list('-created_date', 5000),
       ]);
-      setSessions(sess);
-      const allQ = await base44.entities.Question.list();
-      setQuestionCount(allQ.length);
+      setSessions(recentSess);
+      setAllSessions(allSess ?? []);
+      setQuestionCount((allQ ?? []).length);
+      const map = {};
+      (allQ ?? []).forEach(q => { if (q.id) map[String(q.id)] = q; });
+      setQuestionMap(map);
       await refreshOnline();
     }
     load();
@@ -66,9 +73,21 @@ export default function Dashboard() {
 
   if (!profile) return null;
 
-  const accuracy = profile.total_questions_answered > 0 
-    ? Math.round((profile.total_correct / profile.total_questions_answered) * 100) 
+  // Compute cognitive metrics from answer logs — same formulas as Analytics
+  const allAnswers = allSessions.flatMap(s => {
+    const log = Array.isArray(s.answers_log) ? s.answers_log : [];
+    return log.map(a => ({ ...a, question_id: String(a.question_id ?? '') }));
+  });
+  const getQ = (qid) => questionMap[String(qid)] ?? null;
+
+  const globalAccuracy = allAnswers.length > 0
+    ? Math.round((allAnswers.filter(a => a.answered_correctly).length / allAnswers.length) * 100)
     : 0;
+
+  const evocTypes = new Set(['development', 'clinical_case']);
+  const evocAnswers = allAnswers.filter(a => { const q = getQ(a.question_id); return q && evocTypes.has(q.type); });
+  const evocCorrect = evocAnswers.filter(a => a.answered_correctly).length;
+  const evocPct = evocAnswers.length > 0 ? Math.round((evocCorrect / evocAnswers.length) * 100) : 0;
 
   const leagueConfig = {
     bronze: { name: 'Bronce', color: 'text-amber-600', emoji: '🥉', min: 0 },
@@ -113,7 +132,7 @@ export default function Dashboard() {
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <StatsCard icon={Zap} label="XP Total" value={profile.xp || 0} color="text-primary" />
-        <StatsCard icon={Target} label="Precisión" value={`${accuracy}%`} color="text-green-500" />
+        <StatsCard icon={Target} label="Precisión" value={`${globalAccuracy}%`} color="text-green-500" />
         <StatsCard icon={Flame} label="Racha" value={`${profile.streak_days || 0} días`} color="text-orange-500" />
         <StatsCard icon={Star} label="Nivel" value={`${profile.level || 1}/50`} color="text-yellow-500" />
       </div>
@@ -141,8 +160,8 @@ export default function Dashboard() {
             </h3>
             <div className="space-y-3">
               {[
-                { label: 'Precisión Global', pct: accuracy, raw: `${accuracy}%`, bar: 'bg-primary' },
-                { label: 'Evocación', pct: Math.min((profile.evocation_points||0)*10, 100), raw: `${profile.evocation_points||0} pts`, bar: 'bg-purple-500' },
+                { label: 'Precisión Global', pct: globalAccuracy, raw: `${globalAccuracy}%`, bar: 'bg-primary' },
+                { label: 'Evocación', pct: evocPct, raw: `${evocPct}%`, bar: 'bg-purple-500' },
                 { label: 'Elaboración', pct: Math.min((profile.elaboration_points||0)*5, 100), raw: `${profile.elaboration_points||0} pts`, bar: 'bg-blue-500' },
                 { label: 'Espaciado', pct: Math.min((profile.unique_study_days||0)*5, 100), raw: `${profile.unique_study_days||0} días`, bar: 'bg-green-500' },
                 { label: 'Entrelazado', pct: Math.min(profile.interleaved_sessions||0, 100), raw: `${profile.interleaved_sessions||0} sesiones`, bar: 'bg-orange-500' },
