@@ -3,11 +3,16 @@ import { Clock, ArrowRight, CheckCircle } from 'lucide-react';
 import moment from 'moment';
 
 const typeLabels = {
-  personalized: 'Personalizada',
+  personalized: 'Estudio Entrelazado',
   selective: 'Selectiva',
   express: 'Express',
   duel: 'Duelo',
   tournament: 'Torneo',
+  single_subject: 'Materia Única',
+  difficulty: 'Por Dificultad',
+  cognitive_skill: 'Habilidad Cognitiva',
+  flashcard_custom: 'Flashcards',
+  flashcard: 'Flashcard',
 };
 
 export default function RecentSessions({ sessions }) {

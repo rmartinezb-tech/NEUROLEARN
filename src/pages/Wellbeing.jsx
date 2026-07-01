@@ -98,7 +98,7 @@ function BoxBreathing({ onClose }) {
         {/* Countdown */}
         <motion.div key={`${phaseIdx}-${sec}`} initial={{ scale: 1.25, opacity: 0.6 }} animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.3 }} className="mb-4">
-          <span className="text-6xl font-mono font-bold tabular-nums" style={{ color }}>{sec}</span>
+          <span className="text-6xl font-mono font-bold tabular-nums" style={{ color }}>{phase.dur - sec + 1}</span>
         </motion.div>
 
         {/* SVG square */}

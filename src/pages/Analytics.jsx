@@ -329,7 +329,7 @@ export default function Analytics() {
     { skill: 'Evocación',   value: Math.min(evocationData.pct, 100) },
     { skill: 'Elaboración', value: Math.min((profile?.elaboration_points || 0) * 5, 100) },
     { skill: 'Espaciado',   value: Math.min((profile?.unique_study_days || 0) * 5, 100) },
-    { skill: 'Entrelazado', value: Math.min((profile?.interleaved_sessions || 0) * 10, 100) },
+    { skill: 'Entrelazado', value: Math.min(profile?.interleaved_sessions || 0, 100) },
   ], [globalAccuracy, evocationData, profile]);
 
   // ── Line chart: sessions over time ──

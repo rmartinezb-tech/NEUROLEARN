@@ -141,14 +141,20 @@ export default function Dashboard() {
             </h3>
             <div className="space-y-3">
               {[
-                { label: 'Evocación', value: profile.evocation_points || 0, color: 'bg-purple-500' },
-                { label: 'Elaboración', value: profile.elaboration_points || 0, color: 'bg-blue-500' },
-                { label: 'Estudio Espaciado', value: `${profile.unique_study_days || 0} días`, color: 'bg-green-500' },
-                { label: 'Entrelazamiento', value: `${profile.interleaved_sessions || 0} sesiones`, color: 'bg-orange-500' },
+                { label: 'Precisión Global', pct: accuracy, raw: `${accuracy}%`, bar: 'bg-primary' },
+                { label: 'Evocación', pct: Math.min((profile.evocation_points||0)*10, 100), raw: `${profile.evocation_points||0} pts`, bar: 'bg-purple-500' },
+                { label: 'Elaboración', pct: Math.min((profile.elaboration_points||0)*5, 100), raw: `${profile.elaboration_points||0} pts`, bar: 'bg-blue-500' },
+                { label: 'Espaciado', pct: Math.min((profile.unique_study_days||0)*5, 100), raw: `${profile.unique_study_days||0} días`, bar: 'bg-green-500' },
+                { label: 'Entrelazado', pct: Math.min(profile.interleaved_sessions||0, 100), raw: `${profile.interleaved_sessions||0} sesiones`, bar: 'bg-orange-500' },
               ].map(m => (
-                <div key={m.label} className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{m.label}</span>
-                  <span className="text-sm font-semibold">{m.value}</span>
+                <div key={m.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-muted-foreground">{m.label}</span>
+                    <span className="text-xs font-semibold">{m.raw}</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full ${m.bar} rounded-full transition-all duration-700`} style={{ width: `${m.pct}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
