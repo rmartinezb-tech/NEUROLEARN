@@ -12,6 +12,15 @@ import moment from 'moment';
 
 const SUBJECTS = ['Neurociencias', 'Cuidados de la Salud', 'Ciencias Biomédicas', 'General', 'Otras'];
 
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 min — matches AppLayout heartbeat interval
+
+// Participant is active if they have a recent last_active timestamp.
+// Legacy entries without the field are shown (backward compat).
+const isParticipantActive = (p) => {
+  if (!p.last_active) return true;
+  return Date.now() - new Date(p.last_active).getTime() < ONLINE_THRESHOLD_MS;
+};
+
 export default function StudyRooms() {
   const { profile } = useOutletContext();
   const [rooms, setRooms] = useState([]);
@@ -37,26 +46,46 @@ export default function StudyRooms() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [roomData?.messages]);
 
+  // Heartbeat: update our last_active in the room every 30 s so others see us as present.
+  // Also cleans up any participants that have gone stale in the same pass.
+  useEffect(() => {
+    if (!activeRoom) return;
+    const beat = setInterval(async () => {
+      const fresh = await base44.entities.StudyRoom.get(activeRoom);
+      if (!fresh) return;
+      const participants = (fresh.participants || [])
+        .filter(p => p.user_id === profile.user_id || isParticipantActive(p))
+        .map(p => p.user_id === profile.user_id
+          ? { ...p, last_active: new Date().toISOString() }
+          : p,
+        );
+      await base44.entities.StudyRoom.update(activeRoom, { participants });
+    }, 30_000);
+    return () => clearInterval(beat);
+  }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadRooms = async () => {
     const r = await base44.entities.StudyRoom.filter({ is_active: true });
     setRooms(r);
   };
 
   const joinRoom = async (room) => {
-    const participants = room.participants || [];
-    const already = participants.find(p => p.user_id === profile.user_id);
-    if (!already) {
-      participants.push({
-        user_id: profile.user_id,
-        display_name: profile.display_name,
-        avatar_emoji: profile.avatar_emoji,
-        joined_at: new Date().toISOString(),
-        current_activity: 'Estudiando',
-      });
-      await base44.entities.StudyRoom.update(room.id, { participants });
-    }
+    // Remove stale participants + remove self (will be re-added below with fresh timestamp)
+    const freshParticipants = (room.participants || [])
+      .filter(p => p.user_id !== profile.user_id)
+      .filter(isParticipantActive);
+
+    freshParticipants.push({
+      user_id: profile.user_id,
+      display_name: profile.display_name,
+      avatar_emoji: profile.avatar_emoji,
+      joined_at: new Date().toISOString(),
+      last_active: new Date().toISOString(),
+      current_activity: 'Estudiando',
+    });
+    await base44.entities.StudyRoom.update(room.id, { participants: freshParticipants });
     setActiveRoom(room.id);
-    setRoomData({ ...room, participants });
+    setRoomData({ ...room, participants: freshParticipants });
   };
 
   const leaveRoom = async () => {
@@ -92,12 +121,13 @@ export default function StudyRooms() {
   };
 
   if (activeRoom && roomData) {
+    const activeParticipants = (roomData.participants || []).filter(isParticipantActive);
     return (
       <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-120px)]">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-bold text-lg">{roomData.name}</h2>
-            <p className="text-sm text-muted-foreground">{roomData.subject} • {roomData.participants?.length || 0} participantes</p>
+            <p className="text-sm text-muted-foreground">{roomData.subject} • {activeParticipants.length} participante{activeParticipants.length !== 1 ? 's' : ''} en línea</p>
           </div>
           <Button variant="outline" onClick={leaveRoom} className="rounded-xl"><X className="mr-2 h-4 w-4" />Salir</Button>
         </div>
@@ -105,9 +135,9 @@ export default function StudyRooms() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
           {/* Participants */}
           <div className="lg:col-span-1 bg-card border border-border rounded-xl p-3">
-            <p className="text-xs font-semibold text-muted-foreground mb-2">PARTICIPANTES</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">EN LÍNEA ({activeParticipants.length})</p>
             <div className="space-y-2">
-              {(roomData.participants || []).map(p => (
+              {activeParticipants.map(p => (
                 <div key={p.user_id} className="flex items-center gap-2">
                   <span className="text-xl">{p.avatar_emoji || '👤'}</span>
                   <div>
@@ -164,19 +194,27 @@ export default function StudyRooms() {
         </div>
       ) : (
         <div className="space-y-3">
-          {rooms.map(room => (
-            <div key={room.id} className="bg-card border border-border rounded-xl p-5 flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold">{room.name}</h3>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                  <span>📚 {room.subject}</span>
-                  <span className="flex items-center gap-1"><Users className="h-3 w-3" />{room.participants?.length || 0}</span>
+          {rooms.map(room => {
+            const activeCount = (room.participants || []).filter(isParticipantActive).length;
+            return (
+              <div key={room.id} className="bg-card border border-border rounded-xl p-5 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">{room.name}</h3>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                    <span>📚 {room.subject}</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {activeCount > 0
+                        ? <><span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block mr-0.5" />{activeCount} en línea</>
+                        : 'Vacía'}
+                    </span>
+                  </div>
+                  {room.description && <p className="text-xs text-muted-foreground mt-1">{room.description}</p>}
                 </div>
-                {room.description && <p className="text-xs text-muted-foreground mt-1">{room.description}</p>}
+                <Button onClick={() => joinRoom(room)} className="rounded-xl" size="sm">Unirse</Button>
               </div>
-              <Button onClick={() => joinRoom(room)} className="rounded-xl" size="sm">Unirse</Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

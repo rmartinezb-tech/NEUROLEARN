@@ -14,28 +14,55 @@ import ActiveUsers from '../components/dashboard/ActiveUsers';
 import WeeklyGoals from '../components/dashboard/WeeklyGoals';
 import LeagueCard from '../components/dashboard/LeagueCard';
 
+// A user is "really online" only if they have a heartbeat timestamp within the last 2 minutes.
+// We intentionally return false when last_active is null — no timestamp = no proof of presence.
+// (We already filter by is_online: true, so everyone in the set has that flag; the timestamp
+//  is the only reliable discriminator against stale/stuck sessions.)
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+const isReallyOnline = (u) => {
+  if (!u.last_active) return false;
+  return Date.now() - new Date(u.last_active).getTime() < ONLINE_THRESHOLD_MS;
+};
+
 export default function Dashboard() {
   const { profile, user } = useOutletContext();
   const [sessions, setSessions] = useState([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
+  const refreshOnline = async () => {
+    const profiles = await base44.entities.UserProfile.filter({ is_online: true });
+    setOnlineUsers((profiles || []).filter(isReallyOnline));
+  };
+
   useEffect(() => {
     async function load() {
       if (!profile) return;
-      const [sess, questions, profiles] = await Promise.all([
+      const [sess] = await Promise.all([
         base44.entities.StudySession.filter({ user_id: profile.user_id }, '-created_date', 10),
-        base44.entities.Question.list('-created_date', 1),
-        base44.entities.UserProfile.filter({ is_online: true }),
       ]);
       setSessions(sess);
-      // Get total count from list
       const allQ = await base44.entities.Question.list();
       setQuestionCount(allQ.length);
-      setOnlineUsers(profiles);
+      await refreshOnline();
     }
     load();
   }, [profile]);
+
+  // Real-time: re-evaluate list whenever any UserProfile changes (heartbeats, logouts, etc.)
+  useEffect(() => {
+    const unsub = base44.entities.UserProfile.subscribe(() => refreshOnline());
+    return unsub;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Local timer: re-apply the time threshold every 30 s so stale users drop off
+  // even if no Supabase event arrives (e.g. crashed tab with no beforeunload).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setOnlineUsers(prev => prev.filter(isReallyOnline));
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!profile) return null;
 

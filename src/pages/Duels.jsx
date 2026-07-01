@@ -32,7 +32,8 @@ export default function Duels() {
   const [loading, setLoading]       = useState(true);
   const [activeDuel, setActiveDuel] = useState(null);
   const [resultPopup, setResultPopup] = useState(null);
-  const [sentBanner, setSentBanner] = useState(null); // { opponentName }
+  const [sentBanner, setSentBanner] = useState(null);     // { opponentName }
+  const [dialogSuccess, setDialogSuccess] = useState(null); // { opponentName } — shown inside modal
 
   useEffect(() => { loadData(); }, [profile]);
 
@@ -64,54 +65,59 @@ export default function Duels() {
   const handleChallenge = async () => {
     if (!selectedOpponent || sending) return;
     setSending(true);
+    const opponent = users.find(u => u.user_id === selectedOpponent);
     try {
-      const opponent = users.find(u => u.user_id === selectedOpponent);
       const allQ     = await base44.entities.Question.list('-created_date', 500);
       const eligible = (allQ || []).filter(
         q => !['development', 'clinical_case'].includes(q.type) && q.options?.length,
       );
-      if (eligible.length < 5) { toast.error('No hay suficientes preguntas disponibles'); return; }
+      if (eligible.length < 5) {
+        toast.error('No hay suficientes preguntas disponibles');
+        setSending(false);
+        return;
+      }
       const shuffled = [...eligible].sort(() => Math.random() - 0.5).slice(0, 10);
 
+      // Only pass columns that exist in the base schema.
+      // challenger_played / opponent_played are added by migration 003 — omit here so
+      // the insert doesn't fail if migration hasn't run yet (they default to FALSE via DB).
       await base44.entities.Duel.create({
-        challenger_id:     profile.user_id,
-        challenger_name:   profile.display_name,
-        opponent_id:       selectedOpponent,
-        opponent_name:     opponent?.display_name || 'Oponente',
-        status:            'pending',
-        questions:         shuffled.map(q => q.id),
-        // Explicit nulls + played flags so we can detect "hasn't played yet"
-        challenger_score:  null,
-        opponent_score:    null,
-        challenger_played: false,
-        opponent_played:   false,
+        challenger_id:   profile.user_id,
+        challenger_name: profile.display_name,
+        opponent_id:     selectedOpponent,
+        opponent_name:   opponent?.display_name || 'Oponente',
+        status:          'pending',
+        questions:       shuffled.map(q => q.id),
       });
 
       await base44.entities.Notification.create({
-        user_id: selectedOpponent, type: 'duel_challenge',
-        title: '🤺 ¡Desafío de Duelo!',
+        user_id: selectedOpponent,
+        type:    'duel_challenge',
+        title:   '🤺 ¡Desafío de Duelo!',
         message: `${profile.display_name} te ha retado a un duelo — ¡acepta y demuestra lo que sabes!`,
         is_read: false,
       });
 
-      setShowChallenge(false);
-      setSelectedOpponent('');
-      setSentBanner({ opponentName: opponent?.display_name || 'tu oponente' });
+      const opponentName = opponent?.display_name || 'tu oponente';
+      setDialogSuccess({ opponentName });
+      setSentBanner({ opponentName });
       await loadData();
-    } catch {
-      toast.error('Error al enviar el desafío');
+      // Close dialog after a short delay so the success message is visible
+      setTimeout(() => {
+        setShowChallenge(false);
+        setSelectedOpponent('');
+        setDialogSuccess(null);
+      }, 2500);
+    } catch (err) {
+      console.error('[Duels] Error enviando desafío:', err);
+      toast.error(`Error al enviar el desafío: ${err?.message || 'intenta de nuevo'}`);
     } finally {
       setSending(false);
     }
   };
 
   const acceptDuel = async (duel) => {
-    // Ensure scores and flags are properly null/false before playing
-    await base44.entities.Duel.update(duel.id, {
-      status:            'in_progress',
-      challenger_played: duel.challenger_played ?? false,
-      opponent_played:   duel.opponent_played   ?? false,
-    });
+    await base44.entities.Duel.update(duel.id, { status: 'in_progress' });
     setActiveDuel({ ...duel, status: 'in_progress' });
   };
 
@@ -403,45 +409,70 @@ export default function Duels() {
       </section>
 
       {/* ── Challenge modal ── */}
-      <Dialog open={showChallenge} onOpenChange={setShowChallenge}>
+      <Dialog open={showChallenge} onOpenChange={(open) => {
+        if (!open && !dialogSuccess) { setShowChallenge(false); setSelectedOpponent(''); }
+      }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>🤺 Retar a Duelo</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Elige un oponente. Se seleccionarán 10 preguntas aleatorias de opción múltiple.
-            </p>
 
-            {/* Winner criteria */}
-            <div className="bg-muted/50 rounded-xl p-3 text-xs space-y-1.5">
-              <p className="font-semibold text-foreground mb-1">📋 ¿Cómo se gana?</p>
-              <p>🥇 <strong>Más respuestas correctas</strong> → gana</p>
-              <p>⏱️ <strong>Empate en respuestas</strong> → menor tiempo de respuesta → gana</p>
-              <p>🤝 <strong>Empate exacto</strong> en ambos → empate real (nadie pierde nada)</p>
-              <div className="border-t border-border/50 pt-1.5 mt-1.5 space-y-1">
-                <p>🏆 Ganador: <span className="font-semibold">+{SAB_WIN} Saber ⚔️ · +{XP_WIN} XP · roba 1 ítem</span></p>
-                <p>💔 Perdedor: <span className="font-semibold">+{XP_LOSE} XP · pierde 1 ítem</span></p>
-                <p>🤝 Empate: <span className="font-semibold">+{XP_TIE} XP cada uno</span></p>
+          {dialogSuccess ? (
+            /* ── Success state ── */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="text-center space-y-4 py-4"
+            >
+              <div className="text-6xl">✅</div>
+              <div>
+                <p className="font-bold text-lg">¡Desafío enviado!</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Tu reto llegó a <span className="font-semibold text-foreground">{dialogSuccess.opponentName}</span>.
+                </p>
               </div>
-              <p className="text-muted-foreground border-t border-border/50 pt-1.5 mt-1">
-                ⚠️ El ganador se declara <strong>solo cuando ambos jugadores han terminado</strong>.
+              <div className="bg-muted/60 rounded-xl p-3 text-xs text-muted-foreground text-left space-y-1">
+                <p>⚠️ <strong>No presiones el botón de nuevo</strong> — el desafío ya fue enviado correctamente.</p>
+                <p>📨 Cuando {dialogSuccess.opponentName} acepte, el duelo aparecerá en <strong>"⚡ Tu turno"</strong>.</p>
+                <p>⚔️ Tú también deberás jugar — el ganador se declara cuando <strong>ambos terminen</strong>.</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Esta ventana se cerrará automáticamente…</p>
+            </motion.div>
+          ) : (
+            /* ── Normal state ── */
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Elige un oponente. Se seleccionarán 10 preguntas aleatorias de opción múltiple.
               </p>
+
+              <div className="bg-muted/50 rounded-xl p-3 text-xs space-y-1.5">
+                <p className="font-semibold text-foreground mb-1">📋 ¿Cómo se gana?</p>
+                <p>🥇 <strong>Más respuestas correctas</strong> → gana</p>
+                <p>⏱️ <strong>Empate en respuestas</strong> → menor tiempo de respuesta → gana</p>
+                <p>🤝 <strong>Empate exacto</strong> en ambos → empate real (nadie pierde nada)</p>
+                <div className="border-t border-border/50 pt-1.5 mt-1.5 space-y-1">
+                  <p>🏆 Ganador: <span className="font-semibold">+{SAB_WIN} Saber ⚔️ · +{XP_WIN} XP · roba 1 ítem</span></p>
+                  <p>💔 Perdedor: <span className="font-semibold">+{XP_LOSE} XP · pierde 1 ítem</span></p>
+                  <p>🤝 Empate: <span className="font-semibold">+{XP_TIE} XP cada uno</span></p>
+                </div>
+                <p className="text-muted-foreground border-t border-border/50 pt-1.5 mt-1">
+                  ⚠️ El ganador se declara <strong>solo cuando ambos jugadores han terminado</strong>.
+                </p>
+              </div>
+
+              <Select value={selectedOpponent} onValueChange={setSelectedOpponent}>
+                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecciona oponente" /></SelectTrigger>
+                <SelectContent>
+                  {users.map(u => (
+                    <SelectItem key={u.user_id} value={u.user_id}>{u.avatar_emoji} {u.display_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button onClick={handleChallenge} className="w-full rounded-xl" disabled={!selectedOpponent || sending}>
+                {sending
+                  ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Enviando...</>
+                  : <><Send className="mr-2 h-4 w-4" /> Enviar Desafío</>}
+              </Button>
             </div>
-
-            <Select value={selectedOpponent} onValueChange={setSelectedOpponent}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecciona oponente" /></SelectTrigger>
-              <SelectContent>
-                {users.map(u => (
-                  <SelectItem key={u.user_id} value={u.user_id}>{u.avatar_emoji} {u.display_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button onClick={handleChallenge} className="w-full rounded-xl" disabled={!selectedOpponent || sending}>
-              {sending
-                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Enviando...</>
-                : <><Send className="mr-2 h-4 w-4" /> Enviar Desafío</>}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

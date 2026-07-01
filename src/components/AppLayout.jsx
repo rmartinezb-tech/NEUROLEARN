@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { applyTheme, loadSavedTheme } from '../utils/themes';
+import { supabase } from '@/api/supabaseClient';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
@@ -43,6 +44,18 @@ export default function AppLayout() {
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sessionTokenRef = useRef(null);
+
+  // Cache the session JWT so the synchronous beforeunload handler can use it
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      sessionTokenRef.current = data.session?.access_token ?? null;
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      sessionTokenRef.current = session?.access_token ?? null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     loadSavedTheme();
@@ -64,6 +77,44 @@ export default function AppLayout() {
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Heartbeat: keep last_active fresh every 30 s so other users see us as online.
+  // On tab close, use fetch+keepalive (browser-guaranteed delivery even after unload).
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const beat = setInterval(() => {
+      base44.entities.UserProfile.update(profile.id, {
+        is_online: true,
+        last_active: new Date().toISOString(),
+      });
+    }, 30_000);
+
+    // Synchronous handler — uses cached token so no await is needed before fetch
+    const handleUnload = () => {
+      const token = sessionTokenRef.current ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
+      fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_profiles?id=eq.${profile.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({ is_online: false }),
+          keepalive: true, // browser guarantees delivery even after page closes
+        },
+      );
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      clearInterval(beat);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdminOrMentor = user?.role === 'admin' || user?.role === 'mentor';
 

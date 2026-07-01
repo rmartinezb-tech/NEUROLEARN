@@ -191,12 +191,18 @@ export default function DuelArena({ duel, profile, onFinish }) {
     const avgTime = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 5;
     const accuracy = questions.length ? Math.round((finalScore / questions.length) * 100) : 0;
 
-    // Save MY score + played flag
+    // Detect whether migration 003 has been run (challenger_played column exists)
+    const prefetch = await base44.entities.Duel.get(duel.id);
+    const hasMigration = prefetch.challenger_played !== undefined;
+
+    // Save MY score — only include played flags if migration has been applied
     const myData = isChallenger
       ? { challenger_score: finalScore, challenger_accuracy: accuracy,
-          challenger_avg_time: +avgTime.toFixed(2), challenger_played: true }
-      : { opponent_score:   finalScore, opponent_accuracy:   accuracy,
-          opponent_avg_time:  +avgTime.toFixed(2), opponent_played:   true };
+          challenger_avg_time: +avgTime.toFixed(2),
+          ...(hasMigration ? { challenger_played: true } : {}) }
+      : { opponent_score: finalScore, opponent_accuracy: accuracy,
+          opponent_avg_time: +avgTime.toFixed(2),
+          ...(hasMigration ? { opponent_played: true } : {}) };
 
     await base44.entities.Duel.update(duel.id, myData);
 
@@ -204,9 +210,17 @@ export default function DuelArena({ duel, profile, onFinish }) {
     const fresh = await base44.entities.Duel.get(duel.id);
 
     // ── GUARD: only finalize when BOTH have played ──────────────────────────
-    // Use the explicit boolean flags — immune to score = 0 confusion
-    const cPlayed = isChallenger ? true : (fresh.challenger_played === true);
-    const oPlayed = isChallenger ? (fresh.opponent_played === true) : true;
+    let cPlayed, oPlayed;
+    if (hasMigration) {
+      // Post-migration: use explicit boolean flags (definitive, immune to score=0 confusion)
+      cPlayed = isChallenger ? true : (fresh.challenger_played === true);
+      oPlayed = isChallenger ? (fresh.opponent_played === true) : true;
+    } else {
+      // Pre-migration fallback: score will be NULL if migration 003 step 3 ran,
+      // otherwise 0 (INTEGER DEFAULT). Best-effort — run migration 003 for correct behavior.
+      cPlayed = isChallenger ? true : (fresh.challenger_score !== null && fresh.challenger_score !== undefined);
+      oPlayed = isChallenger ? (fresh.opponent_score !== null && fresh.opponent_score !== undefined) : true;
+    }
 
     if (!cPlayed || !oPlayed) {
       // The other player hasn't finished yet — polling will pick it up
