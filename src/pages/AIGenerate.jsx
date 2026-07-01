@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RotateCcw, Save, Sparkles } from 'lucide-react';
 import { toast } from "sonner";
+import AIDisclaimerButton from '@/components/questions/AIDisclaimerButton';
 
 const typeLabels = {
   multiple_choice: 'Opción Múltiple', true_false: 'V/F', fill_blank: 'Llenar Espacios',
@@ -97,7 +98,10 @@ export default function AIGenerate() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-space font-bold mb-2">⚡ Generar Preguntas con IA</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-space font-bold">⚡ Generar Preguntas con IA</h1>
+        <AIDisclaimerButton />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">Pega texto libre y la IA generará preguntas automáticamente</p>
 
       {generated.length === 0 ? (
@@ -142,6 +146,7 @@ export default function AIGenerate() {
           <div className="flex items-center justify-between">
             <p className="font-semibold">{generated.length} preguntas generadas</p>
             <div className="flex gap-2">
+              <AIDisclaimerButton size="sm" />
               <Button variant="outline" onClick={() => setGenerated([])} className="rounded-xl">Volver</Button>
               <Button onClick={saveAll} className="rounded-xl" disabled={saving}>
                 {saving ? <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}

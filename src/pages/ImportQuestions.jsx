@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Upload, FileText, CheckCircle, XCircle, Download, Zap, AlertTriangle, BookOpen } from 'lucide-react';
 import { toast } from "sonner";
+import AIDisclaimerButton from '@/components/questions/AIDisclaimerButton';
 
 export default function ImportQuestions() {
   const { user } = useOutletContext();
@@ -398,9 +399,12 @@ NOTAS IMPORTANTES
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-space font-bold">📥 Importación Masiva</h1>
-        <Button variant="outline" onClick={downloadInstructions} className="gap-2 rounded-xl">
-          <BookOpen className="h-4 w-4" /> Descargar Instrucciones
-        </Button>
+        <div className="flex gap-2">
+          <AIDisclaimerButton />
+          <Button variant="outline" onClick={downloadInstructions} className="gap-2 rounded-xl">
+            <BookOpen className="h-4 w-4" /> Descargar Instrucciones
+          </Button>
+        </div>
       </div>
       <p className="text-sm text-muted-foreground mb-6">Soporta CSV, Excel (.xlsx), JSON y TXT</p>
 
@@ -502,9 +506,12 @@ NOTAS IMPORTANTES
           )}
 
           {!importing && parsed.length > 0 && (
-            <Button onClick={handleImport} className="w-full rounded-xl" size="lg">
-              Confirmar e importar {parsed.length} preguntas al banco
-            </Button>
+            <div className="space-y-2">
+              <AIDisclaimerButton className="w-full justify-center" />
+              <Button onClick={handleImport} className="w-full rounded-xl" size="lg">
+                Confirmar e importar {parsed.length} preguntas al banco
+              </Button>
+            </div>
           )}
         </div>
       )}
