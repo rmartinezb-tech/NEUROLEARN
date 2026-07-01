@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { applyTheme, loadSavedTheme } from '../utils/themes';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { 
-  LayoutDashboard, BookOpen, Swords, Trophy, MessageSquare, BarChart3, 
+import {
+  LayoutDashboard, BookOpen, Swords, Trophy, MessageSquare, BarChart3,
   Settings, LogOut, Bell, Search, Menu, X, Users, Flag, FileUp, Brain,
-  Zap, Home, Bot, Heart, Calendar, TrendingUp
+  Zap, Home, Bot, Heart, Calendar, TrendingUp, Lightbulb
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ const navItems = [
   { path: '/questions', icon: Brain, label: 'Banco de Preguntas' },
   { path: '/duels', icon: Swords, label: 'Duelos 🤺' },
   { path: '/tournaments', icon: Trophy, label: 'Torneos 🏟️' },
-  { path: '/elaboration', icon: MessageSquare, label: 'Elaboración 💡' },
+  { path: '/elaboration', icon: Lightbulb, label: 'Concurso 💡' },
   { path: '/study-rooms', icon: Home, label: 'Salas de Estudio' },
   { path: '/analytics', icon: BarChart3, label: 'Analytics' },
   { path: '/rankings', icon: Users, label: 'Ranking' },
