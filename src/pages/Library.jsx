@@ -317,14 +317,16 @@ function UploadModal({ onClose, profile, user, onUploaded }) {
         author_role: user?.role || 'user',
         file_url: fileUrl, file_name: file?.name || form.title, file_type: file?.type || '',
         views: 0, rating_sum: 0, rating_count: 0, rating_avg: 0,
-        voter_ids: [], downloads: 0, favorited_by: [],
+        voter_ids: [], downloads: 0,
         tags: tagsArr, license,
+        status: 'pending', // hidden until an admin approves it
       });
-      toast.success('¡Recurso publicado en la Biblioteca! 🏛️');
+      toast.success('¡Recurso enviado para revisión! ⏳ Un administrador lo revisará pronto.');
       onUploaded();
       onClose();
-    } catch {
-      toast.error('Error al publicar el recurso');
+    } catch (err) {
+      console.error('[Library] Error al publicar:', err);
+      toast.error(`Error al enviar el recurso: ${err?.message || 'intenta de nuevo'}`);
     } finally {
       setPublishing(false);
     }
@@ -589,6 +591,42 @@ export default function Library() {
     setLoading(false);
   };
 
+  // A resource is visible to the current user when:
+  //  - it's approved (or has no status, i.e. pre-migration)
+  //  - OR the user is its author (sees their own pending resources)
+  //  - OR the user is admin/mentor (sees everything)
+  const isVisible = (r) =>
+    isAdminOrMentor ||
+    r.author_id === profile.user_id ||
+    !r.status ||
+    r.status === 'approved';
+
+  const approveResource = async (resource) => {
+    await base44.entities.LibraryResource.update(resource.id, { status: 'approved' });
+    await base44.entities.Notification.create({
+      user_id: resource.author_id, type: 'system',
+      title: '✅ Recurso aprobado',
+      message: `Tu recurso "${resource.title}" fue aprobado y ya está disponible en la Biblioteca.`,
+      is_read: false,
+    });
+    setResources(prev => prev.map(r => r.id === resource.id ? { ...r, status: 'approved' } : r));
+    toast.success('Recurso aprobado ✅');
+  };
+
+  const rejectResource = async (resource) => {
+    if (!window.confirm(`¿Rechazar y eliminar "${resource.title}"?`)) return;
+    await base44.entities.Notification.create({
+      user_id: resource.author_id, type: 'system',
+      title: '❌ Recurso rechazado',
+      message: `Tu recurso "${resource.title}" fue rechazado por los administradores y ha sido eliminado.`,
+      is_read: false,
+    });
+    await base44.entities.LibraryResource.delete(resource.id);
+    setResources(prev => prev.filter(r => r.id !== resource.id));
+    if (selectedResource?.id === resource.id) setSelectedResource(null);
+    toast.success('Recurso rechazado y eliminado');
+  };
+
   const openResource = async (resource) => {
     setSelectedResource(resource);
     const newViews = (resource.views || 0) + 1;
@@ -643,13 +681,17 @@ export default function Library() {
 
   const canEdit    = (r) => r.author_id === profile.user_id || isAdminOrMentor;
   const isFav      = (r) => (r.favorited_by || []).includes(profile.user_id);
-  const favCount   = resources.filter(isFav).length;
+  const favCount   = resources.filter(r => isVisible(r) && isFav(r)).length;
+  const pendingResources = resources.filter(r => r.status === 'pending');
 
-  // Build base list for current section
-  let baseList = [...resources];
-  if (section === 'trending')   baseList = [...resources].sort((a, b) => (b.rating_avg || 0) - (a.rating_avg || 0));
-  if (section === 'destacados') baseList = resources.filter(isFav);
-  if (section === 'mine')       baseList = resources.filter(r => r.author_id === profile.user_id);
+  // Build base list for current section (always scope to visible resources first)
+  const visibleResources = resources.filter(isVisible);
+
+  let baseList = [...visibleResources];
+  if (section === 'trending')   baseList = [...visibleResources.filter(r => !r.status || r.status === 'approved')].sort((a, b) => (b.rating_avg || 0) - (a.rating_avg || 0));
+  if (section === 'destacados') baseList = visibleResources.filter(r => isFav(r) && (!r.status || r.status === 'approved'));
+  if (section === 'mine')       baseList = resources.filter(r => r.author_id === profile.user_id); // own = always visible
+  if (section === 'review')     baseList = pendingResources; // admin only
 
   const filtered = baseList.filter(r => {
     const ms = subjectFilter === 'Todos' || r.subject === subjectFilter;
@@ -722,14 +764,19 @@ export default function Library() {
       {/* Section tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {[
-          { id: 'explore',    label: 'Explorar' },
-          { id: 'trending',   label: 'Tendencias 🔥' },
-          { id: 'destacados', label: `Destacados ⭐${favCount > 0 ? ` (${favCount})` : ''}` },
-          { id: 'mine',       label: 'Mis recursos' },
-        ].map(s => (
+          { id: 'explore',    label: 'Explorar',      show: true },
+          { id: 'trending',   label: 'Tendencias 🔥', show: true },
+          { id: 'destacados', label: `Destacados ⭐${favCount > 0 ? ` (${favCount})` : ''}`, show: true },
+          { id: 'mine',       label: 'Mis recursos',  show: true },
+          { id: 'review',     label: `Revisión ⚠️ (${pendingResources.length})`, show: isAdminOrMentor },
+        ].filter(s => s.show).map(s => (
           <button key={s.id} onClick={() => setSection(s.id)}
             className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-              section === s.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+              section === s.id
+                ? s.id === 'review' ? 'bg-orange-500 text-white' : 'bg-primary text-primary-foreground'
+                : s.id === 'review' && pendingResources.length > 0
+                  ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}>
             {s.label}
           </button>
@@ -750,8 +797,64 @@ export default function Library() {
         ))}
       </div>
 
-      {/* Resource grid */}
-      {loading ? (
+      {/* ── Admin review panel ── */}
+      {section === 'review' && isAdminOrMentor && (
+        loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : pendingResources.length === 0 ? (
+          <div className="text-center py-16 bg-card border border-border rounded-xl">
+            <p className="text-4xl mb-3">✅</p>
+            <p className="text-muted-foreground">No hay recursos pendientes de revisión</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{pendingResources.length} recurso{pendingResources.length !== 1 ? 's' : ''} esperando revisión</p>
+            {pendingResources.map(r => (
+              <div key={r.id} className="bg-card border-2 border-orange-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <span className="text-3xl shrink-0">{TYPE_INFO[r.type]?.emoji || '📄'}</span>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-sm">{r.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      por <strong>{r.author_name}</strong> · {r.subject} · {r.level}
+                    </p>
+                    {r.desc && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.desc}</p>}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(LICENSE_INFO[r.license] || LICENSE_INFO.free).color}`}>
+                        {(LICENSE_INFO[r.license] || LICENSE_INFO.free).label}
+                      </span>
+                      <span className="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded-full font-medium">
+                        ⏳ Pendiente
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {r.file_url && (
+                    <Button size="sm" variant="outline" className="rounded-xl gap-1.5"
+                      onClick={() => window.open(r.file_url, '_blank')}>
+                      <Eye className="h-3.5 w-3.5" /> Ver
+                    </Button>
+                  )}
+                  <Button size="sm" className="rounded-xl gap-1.5 bg-green-600 hover:bg-green-700"
+                    onClick={() => approveResource(r)}>
+                    ✅ Aprobar
+                  </Button>
+                  <Button size="sm" variant="destructive" className="rounded-xl gap-1.5"
+                    onClick={() => rejectResource(r)}>
+                    ❌ Rechazar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Resource grid — hidden when showing the admin review panel */}
+      {section !== 'review' && (loading ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -848,7 +951,7 @@ export default function Library() {
             })}
           </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
