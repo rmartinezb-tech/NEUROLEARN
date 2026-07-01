@@ -132,32 +132,35 @@ function AttachmentItem({ att, onPreview }) {
     : File;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2 w-[200px]">
       {cat === 'image' && (
         <img
           src={att.url}
           alt={att.name}
-          className="h-28 w-auto max-w-[160px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+          className="h-44 w-full object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
           onClick={() => onPreview(att)}
         />
       )}
       {cat !== 'image' && (
-        <div className="flex items-center gap-2 bg-muted/60 rounded-lg px-3 py-2 min-w-[180px] max-w-[260px]">
-          <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <span className="text-xs truncate flex-1">{att.name}</span>
+        <div
+          className="flex flex-col items-center justify-center gap-3 bg-muted/60 rounded-xl p-5 cursor-pointer hover:bg-muted/80 transition-colors"
+          onClick={() => onPreview(att)}
+        >
+          <Icon className="h-10 w-10 text-muted-foreground" />
+          <span className="text-xs text-center truncate w-full">{att.name}</span>
         </div>
       )}
-      <div className="flex gap-1">
+      <div className="flex gap-1.5">
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-xs gap-1 rounded-lg px-2"
+          className="flex-1 h-8 text-xs gap-1 rounded-lg"
           onClick={() => onPreview(att)}
         >
           <Eye className="h-3 w-3" /> Vista previa
         </Button>
-        <a href={att.url} download={att.name} target="_blank" rel="noopener noreferrer">
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 rounded-lg px-2">
+        <a href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" className="flex-1">
+          <Button variant="ghost" size="sm" className="w-full h-8 text-xs gap-1 rounded-lg">
             <Download className="h-3 w-3" /> Descargar
           </Button>
         </a>
