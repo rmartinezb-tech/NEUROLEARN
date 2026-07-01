@@ -23,11 +23,20 @@ export default function SessionComplete({ stats, profile, onFinish, onNewSession
     return '💪 La práctica constante hace la diferencia. ¡Tú puedes!';
   };
 
+  const [saveError, setSaveError] = useState(false);
+
   const handleSave = async () => {
     setSaving(true);
-    await onFinish(reflection);
-    setSaved(true);
-    setSaving(false);
+    setSaveError(false);
+    try {
+      await onFinish(reflection);
+    } catch (err) {
+      console.error('Error guardando sesión:', err);
+      setSaveError(true);
+    } finally {
+      setSaved(true);
+      setSaving(false);
+    }
   };
 
   if (saved) {
@@ -36,6 +45,12 @@ export default function SessionComplete({ stats, profile, onFinish, onNewSession
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.1 }}
           className="text-7xl mb-2 inline-block">🎉</motion.div>
         <h1 className="text-3xl font-space font-bold">¡Sesión Completada!</h1>
+
+        {saveError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-600">
+            ⚠️ No se pudieron guardar los resultados en la base de datos. Tus estadísticas locales son correctas pero no se registraron en el servidor.
+          </div>
+        )}
 
         {leveledUp && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}

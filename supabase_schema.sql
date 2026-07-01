@@ -82,6 +82,7 @@ CREATE TABLE questions (
   explanation TEXT,
   hints TEXT,
   difficulty_suggested INTEGER CHECK (difficulty_suggested BETWEEN 1 AND 5),
+  cognitive_skill TEXT,
   image_url TEXT,
   tags TEXT[] DEFAULT '{}',
   origin TEXT CHECK (origin IN ('manual','ai','imported')),
@@ -107,7 +108,7 @@ CREATE TRIGGER set_updated_date_questions
 CREATE TABLE study_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  session_type TEXT NOT NULL CHECK (session_type IN ('personalized','selective','express','duel','tournament')),
+  session_type TEXT NOT NULL CHECK (session_type IN ('personalized','selective','express','duel','tournament','single_subject','difficulty','cognitive','standard','custom')),
   questions_total INTEGER DEFAULT 0,
   questions_correct INTEGER DEFAULT 0,
   questions_incorrect INTEGER DEFAULT 0,
