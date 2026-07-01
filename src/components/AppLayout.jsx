@@ -19,9 +19,9 @@ const navItems = [
   { path: '/duels', icon: Swords, label: 'Duelos 🤺' },
   { path: '/tournaments', icon: Trophy, label: 'Torneos 🏟️' },
   { path: '/elaboration', icon: Lightbulb, label: 'Concurso 💡' },
-  { path: '/study-rooms', icon: Home, label: 'Salas de Estudio' },
-  { path: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { path: '/rankings', icon: Users, label: 'Ranking' },
+  { path: '/study-rooms', icon: Home, label: 'Salas de Estudio 🏠' },
+  { path: '/analytics', icon: BarChart3, label: 'Analytics 📊' },
+  { path: '/rankings', icon: Users, label: 'Ranking 🥇' },
   { path: '/willie', icon: Bot, label: 'WILLIE 🐥' },
   { path: '/wellbeing', icon: Heart, label: 'Bienestar ❤️' },
   { path: '/calendar', icon: Calendar, label: 'Calendario 🗓️' },
@@ -31,8 +31,8 @@ const navItems = [
 ];
 
 const adminItems = [
-  { path: '/import', icon: FileUp, label: 'Importar Preguntas' },
-  { path: '/ai-generate', icon: Zap, label: 'Generar con IA' },
+  { path: '/import', icon: FileUp, label: 'Importar Preguntas 📥' },
+  { path: '/ai-generate', icon: Zap, label: 'Generar con IA ✨' },
   { path: '/reports', icon: Flag, label: 'Reportes 🚩' },
   { path: '/admin-users', icon: Users, label: 'Usuarios 👥' },
 ];
