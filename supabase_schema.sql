@@ -345,7 +345,7 @@ CREATE TABLE calendar_events (
   subject TEXT,
   day INTEGER,
   hour INTEGER,
-  duration INTEGER,
+  duration NUMERIC(3,1),
   type TEXT,
   is_critical BOOLEAN DEFAULT FALSE,
   view_type TEXT CHECK (view_type IN ('individual','group')),

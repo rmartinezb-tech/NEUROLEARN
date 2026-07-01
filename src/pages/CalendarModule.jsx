@@ -33,8 +33,8 @@ function EventBlock({ event, onClick }) {
   return (
     <div onClick={() => onClick(event)}
       style={{ backgroundColor: subj.color + '22', borderLeft: `3px solid ${subj.color}`, height: `${event.duration * 48}px` }}
-      className={`rounded-r-lg p-1 cursor-pointer hover:opacity-80 transition-all text-xs overflow-hidden relative ${event.isCritical ? 'ring-1 ring-orange-400' : ''}`}>
-      {event.isCritical && <span className="absolute top-0.5 right-0.5 text-orange-400 text-xs">🚨</span>}
+      className={`rounded-r-lg p-1 cursor-pointer hover:opacity-80 transition-all text-xs overflow-hidden relative ${event.is_critical ? 'ring-1 ring-orange-400' : ''}`}>
+      {event.is_critical && <span className="absolute top-0.5 right-0.5 text-orange-400 text-xs">🚨</span>}
       <p className="font-semibold truncate" style={{ color: subj.color }}>{event.title}</p>
       <p className="text-muted-foreground truncate">{actType?.emoji} {actType?.label}</p>
     </div>
@@ -42,7 +42,7 @@ function EventBlock({ event, onClick }) {
 }
 
 function AddEventModal({ onClose, onSave, defaultDay }) {
-  const [form, setForm] = useState({ title: '', subject: 'neuro', day: defaultDay ?? 0, hour: 9, duration: 1, type: 'individual', isCritical: false });
+  const [form, setForm] = useState({ title: '', subject: 'neuro', day: defaultDay ?? 0, hour: 9, duration: 1, type: 'individual', is_critical: false });
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
@@ -90,7 +90,7 @@ function AddEventModal({ onClose, onSave, defaultDay }) {
             </select>
           </div>
           <div className="flex items-center gap-2 mt-4">
-            <input type="checkbox" id="critical" checked={form.isCritical} onChange={e => setForm({...form, isCritical: e.target.checked})} className="rounded" />
+            <input type="checkbox" id="critical" checked={form.is_critical} onChange={e => setForm({...form, is_critical: e.target.checked})} className="rounded" />
             <label htmlFor="critical" className="text-sm">¿Evento crítico? 🚨</label>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function CalendarModule() {
   const totalHours = events.reduce((sum, e) => sum + (e.duration || 0), 0);
   const loadColor = totalHours < 15 ? 'text-green-500' : totalHours < 25 ? 'text-yellow-500' : 'text-red-500';
   const loadBg = totalHours < 15 ? 'bg-green-500' : totalHours < 25 ? 'bg-yellow-500' : 'bg-red-500';
-  const criticalEvents = events.filter(e => e.isCritical);
+  const criticalEvents = events.filter(e => e.is_critical);
 
   const handleSave = async (form) => {
     try {
@@ -138,6 +138,7 @@ export default function CalendarModule() {
       setEvents(prev => [...prev, created]);
     } catch (err) {
       console.error('[Calendar] save error:', err);
+      alert('No se pudo crear el evento. Intenta de nuevo.');
     }
   };
 
@@ -178,7 +179,7 @@ export default function CalendarModule() {
                   <p><span className="text-muted-foreground">Tipo:</span> {act?.emoji} {act?.label}</p>
                   <p><span className="text-muted-foreground">Día:</span> {DAYS[selectedEvent.day]}</p>
                   <p><span className="text-muted-foreground">Hora:</span> {selectedEvent.hour}:00 — {(selectedEvent.hour || 0) + (selectedEvent.duration || 0)}:00</p>
-                  {selectedEvent.isCritical && <p className="text-orange-400 font-medium">🚨 Evento crítico</p>}
+                  {selectedEvent.is_critical && <p className="text-orange-400 font-medium">🚨 Evento crítico</p>}
                 </div>
               );
             })()}
