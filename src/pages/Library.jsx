@@ -319,7 +319,7 @@ function UploadModal({ onClose, profile, user, onUploaded }) {
         views: 0, rating_sum: 0, rating_count: 0, rating_avg: 0,
         voter_ids: [], downloads: 0,
         tags: tagsArr, license,
-        status: 'pending', // hidden until an admin approves it
+        // status omitted — DB DEFAULT 'pending' applies once migration 005 is run
       });
       toast.success('¡Recurso enviado para revisión! ⏳ Un administrador lo revisará pronto.');
       onUploaded();
