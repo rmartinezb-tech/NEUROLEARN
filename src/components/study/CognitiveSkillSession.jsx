@@ -179,10 +179,10 @@ export default function CognitiveSkillSession({ profile, onBack }) {
         </div>
 
         {/* Session config */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <NumericInput label="Tiempo por bloque (min)" value={config.blockMinutes}
             onChange={v => setConfig(c => ({ ...c, blockMinutes: v }))} min={5} max={120} step={5} />
-          <NumericInput label="Pausa (min)" value={config.pauseMinutes}
+          <NumericInput label="Pausa entre bloques (min)" value={config.pauseMinutes}
             onChange={v => setConfig(c => ({ ...c, pauseMinutes: v }))} min={1} max={30} step={1} />
           <NumericInput label="Ciclos por bloque" value={config.cycles}
             onChange={v => setConfig(c => ({ ...c, cycles: v }))} min={1} max={10} step={1} />

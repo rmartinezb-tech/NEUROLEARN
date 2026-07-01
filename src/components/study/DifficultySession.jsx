@@ -125,16 +125,14 @@ export default function DifficultySession({ profile, onBack }) {
         <div className="grid grid-cols-1 gap-4">
           <NumericInput label="N° de preguntas por sesión" value={config.questionCount}
             onChange={v => setConfig(c => ({ ...c, questionCount: v }))} min={1} max={200} step={1} />
-          <div className="grid grid-cols-2 gap-4">
-            <NumericInput label="Tiempo por bloque (min)" value={config.blockMinutes}
-              onChange={v => setConfig(c => ({ ...c, blockMinutes: v }))} min={5} max={120} step={5} />
-            <NumericInput label="Pausa (min)" value={config.pauseMinutes}
-              onChange={v => setConfig(c => ({ ...c, pauseMinutes: v }))} min={1} max={30} step={1} />
-            <NumericInput label="Ciclos por bloque" value={config.cycles}
-              onChange={v => setConfig(c => ({ ...c, cycles: v }))} min={1} max={10} step={1} />
-            <NumericInput label="N° de bloques" value={config.blocks}
-              onChange={v => setConfig(c => ({ ...c, blocks: v }))} min={1} max={8} step={1} />
-          </div>
+          <NumericInput label="Tiempo por bloque (min)" value={config.blockMinutes}
+            onChange={v => setConfig(c => ({ ...c, blockMinutes: v }))} min={5} max={120} step={5} />
+          <NumericInput label="Pausa entre bloques (min)" value={config.pauseMinutes}
+            onChange={v => setConfig(c => ({ ...c, pauseMinutes: v }))} min={1} max={30} step={1} />
+          <NumericInput label="Ciclos por bloque" value={config.cycles}
+            onChange={v => setConfig(c => ({ ...c, cycles: v }))} min={1} max={10} step={1} />
+          <NumericInput label="N° de bloques" value={config.blocks}
+            onChange={v => setConfig(c => ({ ...c, blocks: v }))} min={1} max={8} step={1} />
         </div>
 
         <DurationBadge blocks={config.blocks} blockMinutes={config.blockMinutes} pauseMinutes={config.pauseMinutes} />
