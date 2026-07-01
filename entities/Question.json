@@ -82,7 +82,15 @@
     },
     "image_url": {
       "type": "string",
-      "description": "URL de imagen adjunta"
+      "description": "URL de imagen adjunta (JPG, PNG, GIF, WebP)"
+    },
+    "audio_url": {
+      "type": "string",
+      "description": "URL de archivo de audio adjunto (MP3, WAV, OGG)"
+    },
+    "video_url": {
+      "type": "string",
+      "description": "URL de archivo de video adjunto (MP4, WebM)"
     },
     "tags": {
       "type": "array",

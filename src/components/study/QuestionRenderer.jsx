@@ -303,7 +303,17 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
       <h2 className="text-lg font-semibold mb-2">{question.statement}</h2>
 
       {question.image_url && (
-        <img src={question.image_url} alt="" className="rounded-xl max-h-64 object-contain my-4" />
+        <img src={question.image_url} alt="" className="rounded-xl max-h-64 object-contain my-4 w-full" />
+      )}
+      {question.video_url && (
+        <video controls className="rounded-xl w-full max-h-72 my-4 bg-black">
+          <source src={question.video_url} />
+        </video>
+      )}
+      {question.audio_url && (
+        <audio controls className="w-full my-3">
+          <source src={question.audio_url} />
+        </audio>
       )}
 
       {question.hints && !answered && (

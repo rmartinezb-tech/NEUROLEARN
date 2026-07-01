@@ -15,7 +15,8 @@ export default function CreateQuestionModal({ onClose, onCreated }) {
     statement: '', type: 'multiple_choice', subject: 'Neurociencias', cognitive_skill: '',
     options: ['', '', '', ''], correct_answer: '', correct_index: 0,
     explanation: '', hints: '', difficulty_suggested: 3,
-    flashcard_back: '', image_url: '', status: 'active', origin: 'manual',
+    flashcard_back: '', image_url: '', audio_url: '', video_url: '',
+    status: 'active', origin: 'manual',
     sequence_order: ['', '', ''],
     matching_pairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
   });
@@ -63,11 +64,12 @@ export default function CreateQuestionModal({ onClose, onCreated }) {
     onClose();
   };
 
-  const handleImageUpload = async (e) => {
+  const handleMediaUpload = async (e, field) => {
     const file = e.target.files[0];
     if (!file) return;
     const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    update('image_url', file_url);
+    update(field, file_url);
+    e.target.value = '';
   };
 
   const moveSeq = (idx, dir) => {
@@ -264,10 +266,54 @@ export default function CreateQuestionModal({ onClose, onCreated }) {
             </div>
           </div>
 
-          <div>
-            <Label>Imagen (opcional)</Label>
-            <input type="file" accept="image/*" onChange={handleImageUpload} className="mt-1 text-sm" />
-            {form.image_url && <img src={form.image_url} alt="" className="h-20 rounded-lg mt-2" />}
+          {/* Media attachments */}
+          <div className="space-y-3">
+            <Label>Archivos multimedia (opcional)</Label>
+
+            {/* Image / GIF */}
+            <div className="flex items-start gap-3 p-3 bg-muted/40 rounded-xl border border-border">
+              <span className="text-lg shrink-0">🖼️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium mb-1">Imagen / GIF</p>
+                <input type="file" accept="image/*" onChange={e => handleMediaUpload(e, 'image_url')} className="text-xs w-full" />
+                {form.image_url && (
+                  <div className="mt-2 relative inline-block">
+                    <img src={form.image_url} alt="" className="h-20 rounded-lg object-contain" />
+                    <button onClick={() => update('image_url', '')} className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-destructive text-white rounded-full text-xs flex items-center justify-center">×</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Audio */}
+            <div className="flex items-start gap-3 p-3 bg-muted/40 rounded-xl border border-border">
+              <span className="text-lg shrink-0">🎵</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium mb-1">Audio (MP3, WAV, OGG)</p>
+                <input type="file" accept="audio/*" onChange={e => handleMediaUpload(e, 'audio_url')} className="text-xs w-full" />
+                {form.audio_url && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <audio controls className="h-8 flex-1"><source src={form.audio_url} /></audio>
+                    <button onClick={() => update('audio_url', '')} className="h-5 w-5 bg-destructive text-white rounded-full text-xs flex items-center justify-center shrink-0">×</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Video */}
+            <div className="flex items-start gap-3 p-3 bg-muted/40 rounded-xl border border-border">
+              <span className="text-lg shrink-0">🎬</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium mb-1">Video (MP4, WebM)</p>
+                <input type="file" accept="video/*" onChange={e => handleMediaUpload(e, 'video_url')} className="text-xs w-full" />
+                {form.video_url && (
+                  <div className="mt-2 relative">
+                    <video controls className="w-full max-h-32 rounded-lg bg-black"><source src={form.video_url} /></video>
+                    <button onClick={() => update('video_url', '')} className="absolute top-1 right-1 h-5 w-5 bg-destructive text-white rounded-full text-xs flex items-center justify-center">×</button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
