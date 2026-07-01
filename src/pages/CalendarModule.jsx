@@ -9,13 +9,13 @@ const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 const SUBJECT_COLORS = {
-  identidad: { color: '#a78bfa', label: 'Identidad Personal', emoji: '🧬' },
-  arte: { color: '#f59e0b', label: 'Taller de Arte', emoji: '🎨' },
-  biomed: { color: '#22c55e', label: 'Ciencias Biomédicas', emoji: '🔬' },
-  ia: { color: '#06b6d4', label: 'IA en Salud', emoji: '🤖' },
-  neuro: { color: '#6366f1', label: 'Neurociencias', emoji: '🧠' },
-  cuidados: { color: '#ec4899', label: 'Cuidados en Salud', emoji: '💊' },
-  lab: { color: '#f97316', label: 'Laboratorio', emoji: '🧪' },
+  identidad: { color: '#a78bfa', label: 'Identidad Personal',   emoji: '🎭' },
+  arte:      { color: '#f59e0b', label: 'Taller de Arte',        emoji: '🎨' },
+  biomed:    { color: '#22c55e', label: 'Ciencias Biomédicas',   emoji: '🔬' },
+  ia:        { color: '#06b6d4', label: 'IA en Salud',           emoji: '🤖' },
+  neuro:     { color: '#6366f1', label: 'Neurociencias',         emoji: '🧠' },
+  cuidados:  { color: '#ec4899', label: 'Cuidados en Salud',     emoji: '🫂' },
+  lab:       { color: '#f97316', label: 'Laboratorio',           emoji: '🧪' },
 };
 
 const ACTIVITY_TYPES = [
@@ -117,10 +117,14 @@ export default function CalendarModule() {
 
   const loadEvents = async () => {
     if (!profile) return;
-    const all = view === 'individual'
-      ? await base44.entities.CalendarEvent.filter({ user_id: profile.user_id }, '-created_date', 200)
-      : await base44.entities.CalendarEvent.list('-created_date', 200);
-    setEvents(all);
+    try {
+      const all = view === 'individual'
+        ? await base44.entities.CalendarEvent.filter({ user_id: profile.user_id }, '-created_date', 200)
+        : await base44.entities.CalendarEvent.filter({ view_type: 'group' }, '-created_date', 200);
+      setEvents(all || []);
+    } catch (err) {
+      console.error('[Calendar] load error:', err);
+    }
   };
 
   const totalHours = events.reduce((sum, e) => sum + (e.duration || 0), 0);
@@ -129,14 +133,26 @@ export default function CalendarModule() {
   const criticalEvents = events.filter(e => e.isCritical);
 
   const handleSave = async (form) => {
-    const created = await base44.entities.CalendarEvent.create({ ...form, user_id: profile.user_id, view_type: view });
-    setEvents(prev => [...prev, created]);
+    try {
+      const created = await base44.entities.CalendarEvent.create({ ...form, user_id: profile.user_id, view_type: view });
+      setEvents(prev => [...prev, created]);
+    } catch (err) {
+      console.error('[Calendar] save error:', err);
+    }
   };
 
-  const handleDelete = async (id) => {
-    await base44.entities.CalendarEvent.delete(id);
-    setEvents(prev => prev.filter(e => e.id !== id));
-    setSelectedEvent(null);
+  const handleDelete = async (ev) => {
+    if (ev.user_id !== profile.user_id) {
+      alert('Solo puedes eliminar tus propios eventos');
+      return;
+    }
+    try {
+      await base44.entities.CalendarEvent.delete(ev.id);
+      setEvents(prev => prev.filter(e => e.id !== ev.id));
+      setSelectedEvent(null);
+    } catch (err) {
+      console.error('[Calendar] delete error:', err);
+    }
   };
 
   const getEventsForSlot = (day, hour) => events.filter(e => e.day === day && e.hour === hour);
@@ -166,7 +182,7 @@ export default function CalendarModule() {
                 </div>
               );
             })()}
-            <Button variant="destructive" size="sm" className="w-full" onClick={() => handleDelete(selectedEvent.id)}>
+            <Button variant="destructive" size="sm" className="w-full" onClick={() => handleDelete(selectedEvent)}>
               Eliminar evento
             </Button>
           </motion.div>
@@ -180,7 +196,7 @@ export default function CalendarModule() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-muted rounded-xl p-1 gap-1">
-            {[{id:'individual', icon: User, label:'Individual'}, {id:'group', icon: Users, label:'Grupal'}].map(v => (
+            {[{id:'individual', icon: User, label:'Individual'}, {id:'group', icon: Users, label:'Público'}].map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${view === v.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                 <v.icon className="h-4 w-4" /> {v.label}

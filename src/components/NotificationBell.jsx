@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -6,17 +7,45 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import moment from 'moment';
 
+// Maps notification type (and optionally message keywords) to the route to navigate
+function resolveRoute(notif) {
+  const msg = `${notif.title || ''} ${notif.message || ''}`.toLowerCase();
+  switch (notif.type) {
+    case 'duel_challenge':
+    case 'duel_result':
+      return '/duels';
+    case 'tournament':
+      return '/tournaments';
+    case 'elaboration_vote':
+    case 'elaboration_comment':
+    case 'elaboration_reaction':
+      return '/elaboration';
+    case 'achievement':
+    case 'easter_egg':
+      return '/profile';
+    case 'system':
+    default:
+      if (msg.includes('biblioteca') || msg.includes('recurso') || msg.includes('aprobado') || msg.includes('rechazado')) return '/library';
+      if (msg.includes('torneo'))    return '/tournaments';
+      if (msg.includes('duelo'))     return '/duels';
+      if (msg.includes('sala'))      return '/study-rooms';
+      if (msg.includes('sugerencia')) return '/suggestions';
+      return '/';
+  }
+}
+
 export default function NotificationBell({ userId }) {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [unreadCount, setUnreadCount]     = useState(0);
+  const [open, setOpen]                   = useState(false);
 
   useEffect(() => {
     if (!userId) return;
     async function load() {
       const notifs = await base44.entities.Notification.filter({ user_id: userId }, '-created_date', 20);
-      setNotifications(notifs);
-      setUnreadCount(notifs.filter(n => !n.is_read).length);
+      setNotifications(notifs || []);
+      setUnreadCount((notifs || []).filter(n => !n.is_read).length);
     }
     load();
     const unsub = base44.entities.Notification.subscribe(() => load());
@@ -45,10 +74,22 @@ export default function NotificationBell({ userId }) {
     if (val) markAllRead();
   };
 
+  const handleDoubleClick = (notif) => {
+    const route = resolveRoute(notif);
+    setOpen(false);
+    navigate(route);
+  };
+
   const typeIcon = {
-    duel_challenge: '🤺', duel_result: '⚔️', tournament: '🏟️',
-    elaboration_vote: '👍', elaboration_comment: '💬',
-    achievement: '🏆', easter_egg: '🥚', system: '🔔'
+    duel_challenge:     '🤺',
+    duel_result:        '⚔️',
+    tournament:         '🏟️',
+    elaboration_vote:   '👍',
+    elaboration_comment:'💬',
+    elaboration_reaction:'❤️',
+    achievement:        '🏆',
+    easter_egg:         '🥚',
+    system:             '🔔',
   };
 
   return (
@@ -64,8 +105,9 @@ export default function NotificationBell({ userId }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0 rounded-xl" align="end">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h3 className="font-semibold text-sm">Notificaciones</h3>
+          <p className="text-xs text-muted-foreground">Doble clic para ir al módulo</p>
         </div>
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (
@@ -75,13 +117,14 @@ export default function NotificationBell({ userId }) {
               <button
                 key={notif.id}
                 onClick={() => markRead(notif)}
+                onDoubleClick={() => handleDoubleClick(notif)}
                 className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors ${!notif.is_read ? 'bg-primary/5' : ''}`}
               >
                 <div className="flex items-start gap-2">
                   <span className="text-lg">{typeIcon[notif.type] || '🔔'}</span>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm ${!notif.is_read ? 'font-semibold' : ''}`}>{notif.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{notif.message}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.message}</p>
                     <p className="text-xs text-muted-foreground/60 mt-1">{moment(notif.created_date).fromNow()}</p>
                   </div>
                   {!notif.is_read && <div className="h-2 w-2 rounded-full bg-primary mt-1.5 shrink-0" />}
