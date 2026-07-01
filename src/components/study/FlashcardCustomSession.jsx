@@ -529,10 +529,8 @@ function StudyPhase({ questions, styles, config, profile, onBack }) {
     setStats(prev => {
       const newTimes   = [...prev.responseTimes, responseTime].slice(-15);
       const newAnswers = [...prev.answers, { question_id: currentQ.id, answered_correctly: knew, time_seconds: responseTime }];
-      const last10     = newAnswers.slice(-10);
-      const recentErrors = last10.filter(a => !a.answered_correctly).length;
-      const avgTime = newTimes.reduce((a, b) => a + b, 0) / (newTimes.length || 1);
-      if (newTimes.length >= 8 && avgTime > 25 && recentErrors >= 5) {
+      const last5 = newAnswers.slice(-5);
+      if (last5.length === 5 && last5.every(a => !a.answered_correctly)) {
         setFatigueModal(true);
         setIsPaused(true);
       }

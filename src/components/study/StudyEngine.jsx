@@ -133,10 +133,9 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
 
     setStats(prev => {
       const newTimes = [...prev.responseTimes, responseTime].slice(-15);
-      const recent = [...prev.answers, { question_id: currentQ.id, answered_correctly: correct, time_seconds: responseTime, confidence }].slice(-10);
-      const recentErrors = recent.filter(a => !a.answered_correctly).length;
-      const avgTime = newTimes.reduce((a, b) => a + b, 0) / (newTimes.length || 1);
-      if (newTimes.length >= 8 && avgTime > 25 && recentErrors >= 5) {
+      const newAnswers = [...prev.answers, { question_id: currentQ.id, answered_correctly: correct, time_seconds: responseTime, confidence }];
+      const last5 = newAnswers.slice(-5);
+      if (last5.length === 5 && last5.every(a => !a.answered_correctly)) {
         setFatigueModal(true);
         setIsPaused(true);
       }
@@ -146,7 +145,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
         incorrect: prev.incorrect + (correct ? 0 : 1),
         total: prev.total + 1,
         xp: prev.xp + xp,
-        answers: [...prev.answers, { question_id: currentQ.id, answered_correctly: correct, time_seconds: responseTime, confidence }],
+        answers: newAnswers,
         responseTimes: newTimes,
       };
     });
