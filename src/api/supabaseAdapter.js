@@ -153,9 +153,7 @@ const auth = {
 
   async logout(redirectUrl) {
     await supabase.auth.signOut()
-    if (redirectUrl !== undefined) {
-      window.location.href = '/sign-in'
-    }
+    window.location.href = redirectUrl ?? '/sign-in'
   },
 
   redirectToLogin() {
