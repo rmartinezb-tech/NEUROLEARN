@@ -88,6 +88,7 @@ export default function Dashboard() {
   const evocAnswers = allAnswers.filter(a => { const q = getQ(a.question_id); return q && evocTypes.has(q.type); });
   const evocCorrect = evocAnswers.filter(a => a.answered_correctly).length;
   const evocPct = evocAnswers.length > 0 ? Math.round((evocCorrect / evocAnswers.length) * 100) : 0;
+  const evocPoints = Math.floor(evocCorrect / 5);
 
   const leagueConfig = {
     bronze: { name: 'Bronce', color: 'text-amber-600', emoji: '🥉', min: 0 },
@@ -161,7 +162,7 @@ export default function Dashboard() {
             <div className="space-y-3">
               {[
                 { label: 'Precisión Global', pct: globalAccuracy, raw: `${globalAccuracy}%`, bar: 'bg-primary' },
-                { label: 'Evocación', pct: evocPct, raw: `${evocPct}%`, bar: 'bg-purple-500' },
+                { label: 'Evocación', pct: evocPct, raw: `${evocPoints} pto${evocPoints !== 1 ? 's' : ''}`, bar: 'bg-purple-500' },
                 { label: 'Elaboración', pct: Math.min((profile.elaboration_points||0)*5, 100), raw: `${profile.elaboration_points||0} pts`, bar: 'bg-blue-500' },
                 { label: 'Espaciado', pct: Math.min((profile.unique_study_days||0)*5, 100), raw: `${profile.unique_study_days||0} días`, bar: 'bg-green-500' },
                 { label: 'Entrelazado', pct: Math.min(profile.interleaved_sessions||0, 100), raw: `${profile.interleaved_sessions||0} sesiones`, bar: 'bg-orange-500' },

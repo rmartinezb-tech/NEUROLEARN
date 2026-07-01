@@ -66,8 +66,8 @@ export default function Suggestions() {
   };
 
   const resolve = async (s) => {
-    await base44.entities.Suggestion.delete(s.id);
-    toast.success('Sugerencia resuelta y eliminada');
+    await base44.entities.Suggestion.update(s.id, { status: 'resolved' });
+    toast.success('Sugerencia marcada como resuelta');
     load();
   };
 
