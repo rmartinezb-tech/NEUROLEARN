@@ -586,9 +586,15 @@ export default function Library() {
 
   const loadResources = async () => {
     setLoading(true);
-    const all = await base44.entities.LibraryResource.list('-created_date', 200);
-    setResources(all || []);
-    setLoading(false);
+    try {
+      const all = await base44.entities.LibraryResource.list('-created_date', 200);
+      setResources(all || []);
+    } catch (err) {
+      console.error('[Library] Error cargando recursos:', err);
+      toast.error('Error al cargar la biblioteca');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // A resource is visible to the current user when:
@@ -602,52 +608,71 @@ export default function Library() {
     r.status === 'approved';
 
   const approveResource = async (resource) => {
-    await base44.entities.LibraryResource.update(resource.id, { status: 'approved' });
-    await base44.entities.Notification.create({
-      user_id: resource.author_id, type: 'system',
-      title: '✅ Recurso aprobado',
-      message: `Tu recurso "${resource.title}" fue aprobado y ya está disponible en la Biblioteca.`,
-      is_read: false,
-    });
-    setResources(prev => prev.map(r => r.id === resource.id ? { ...r, status: 'approved' } : r));
-    toast.success('Recurso aprobado ✅');
+    try {
+      await base44.entities.LibraryResource.update(resource.id, { status: 'approved' });
+      await base44.entities.Notification.create({
+        user_id: resource.author_id, type: 'system',
+        title: '✅ Recurso aprobado',
+        message: `Tu recurso "${resource.title}" fue aprobado y ya está disponible en la Biblioteca.`,
+        is_read: false,
+      });
+      setResources(prev => prev.map(r => r.id === resource.id ? { ...r, status: 'approved' } : r));
+      toast.success('Recurso aprobado ✅');
+    } catch (err) {
+      console.error('[Library] Error aprobando recurso:', err);
+      toast.error('Error al aprobar el recurso');
+    }
   };
 
   const rejectResource = async (resource) => {
     if (!window.confirm(`¿Rechazar y eliminar "${resource.title}"?`)) return;
-    await base44.entities.Notification.create({
-      user_id: resource.author_id, type: 'system',
-      title: '❌ Recurso rechazado',
-      message: `Tu recurso "${resource.title}" fue rechazado por los administradores y ha sido eliminado.`,
-      is_read: false,
-    });
-    await base44.entities.LibraryResource.delete(resource.id);
-    setResources(prev => prev.filter(r => r.id !== resource.id));
-    if (selectedResource?.id === resource.id) setSelectedResource(null);
-    toast.success('Recurso rechazado y eliminado');
+    try {
+      await base44.entities.Notification.create({
+        user_id: resource.author_id, type: 'system',
+        title: '❌ Recurso rechazado',
+        message: `Tu recurso "${resource.title}" fue rechazado por los administradores y ha sido eliminado.`,
+        is_read: false,
+      });
+      await base44.entities.LibraryResource.delete(resource.id);
+      setResources(prev => prev.filter(r => r.id !== resource.id));
+      if (selectedResource?.id === resource.id) setSelectedResource(null);
+      toast.success('Recurso rechazado y eliminado');
+    } catch (err) {
+      console.error('[Library] Error rechazando recurso:', err);
+      toast.error('Error al rechazar el recurso');
+    }
   };
 
   const openResource = async (resource) => {
     setSelectedResource(resource);
-    const newViews = (resource.views || 0) + 1;
-    await base44.entities.LibraryResource.update(resource.id, { views: newViews });
-    setResources(prev => prev.map(r => r.id === resource.id ? { ...r, views: newViews } : r));
+    try {
+      const newViews = (resource.views || 0) + 1;
+      await base44.entities.LibraryResource.update(resource.id, { views: newViews });
+      setResources(prev => prev.map(r => r.id === resource.id ? { ...r, views: newViews } : r));
+    } catch {
+      // view counter failure is non-critical
+    }
   };
 
   const rateResource = async (value) => {
     const resource = selectedResource;
     if ((resource.voter_ids || []).includes(profile.user_id)) { toast.error('Ya calificaste este recurso'); return; }
-    const newVoterIds = [...(resource.voter_ids || []), profile.user_id];
-    const newSum      = (resource.rating_sum || 0) + value;
-    const newCount    = (resource.rating_count || 0) + 1;
-    const newAvg      = newSum / newCount;
-    await base44.entities.LibraryResource.update(resource.id, {
-      voter_ids: newVoterIds, rating_sum: newSum, rating_count: newCount, rating_avg: newAvg,
-    });
-    const updated = { ...resource, voter_ids: newVoterIds, rating_sum: newSum, rating_count: newCount, rating_avg: newAvg };
-    setResources(prev => prev.map(r => r.id === resource.id ? updated : r));
-    setSelectedResource(updated);
-    toast.success(`Calificaste con ${value} ⭐`);
+    try {
+      const newVoterIds = [...(resource.voter_ids || []), profile.user_id];
+      const newSum      = (resource.rating_sum || 0) + value;
+      const newCount    = (resource.rating_count || 0) + 1;
+      const newAvg      = newSum / newCount;
+      await base44.entities.LibraryResource.update(resource.id, {
+        voter_ids: newVoterIds, rating_sum: newSum, rating_count: newCount, rating_avg: newAvg,
+      });
+      const updated = { ...resource, voter_ids: newVoterIds, rating_sum: newSum, rating_count: newCount, rating_avg: newAvg };
+      setResources(prev => prev.map(r => r.id === resource.id ? updated : r));
+      setSelectedResource(updated);
+      toast.success(`Calificaste con ${value} ⭐`);
+    } catch (err) {
+      console.error('[Library] Error calificando:', err);
+      toast.error('Error al guardar la calificación');
+    }
   };
 
   const toggleFavorite = async () => {
@@ -657,19 +682,29 @@ export default function Library() {
     const newFavs = already
       ? favs.filter(id => id !== profile.user_id)
       : [...favs, profile.user_id];
-    await base44.entities.LibraryResource.update(resource.id, { favorited_by: newFavs });
-    const updated = { ...resource, favorited_by: newFavs };
-    setResources(prev => prev.map(r => r.id === resource.id ? updated : r));
-    setSelectedResource(updated);
-    toast.success(already ? 'Quitado de Destacados' : '⭐ Agregado a Destacados');
+    try {
+      await base44.entities.LibraryResource.update(resource.id, { favorited_by: newFavs });
+      const updated = { ...resource, favorited_by: newFavs };
+      setResources(prev => prev.map(r => r.id === resource.id ? updated : r));
+      setSelectedResource(updated);
+      toast.success(already ? 'Quitado de Destacados' : '⭐ Agregado a Destacados');
+    } catch (err) {
+      console.error('[Library] Error en favoritos:', err);
+      toast.error('Error al actualizar Destacados');
+    }
   };
 
   const deleteResource = async (resource) => {
-    if (!window.confirm('¿Eliminar este recurso?')) return;
-    await base44.entities.LibraryResource.delete(resource.id);
-    setResources(prev => prev.filter(r => r.id !== resource.id));
-    if (selectedResource?.id === resource.id) setSelectedResource(null);
-    toast.success('Recurso eliminado');
+    if (!window.confirm('¿Eliminar este recurso permanentemente?')) return;
+    try {
+      await base44.entities.LibraryResource.delete(resource.id);
+      setResources(prev => prev.filter(r => r.id !== resource.id));
+      if (selectedResource?.id === resource.id) setSelectedResource(null);
+      toast.success('Recurso eliminado');
+    } catch (err) {
+      console.error('[Library] Error eliminando recurso:', err);
+      toast.error('No se pudo eliminar el recurso');
+    }
   };
 
   const trackDownload = () => {
@@ -680,6 +715,7 @@ export default function Library() {
   };
 
   const canEdit    = (r) => r.author_id === profile.user_id || isAdminOrMentor;
+  const canDelete  = (r) => r.author_id === profile.user_id || isAdminOrMentor;
   const isFav      = (r) => (r.favorited_by || []).includes(profile.user_id);
   const favCount   = resources.filter(r => isVisible(r) && isFav(r)).length;
   const pendingResources = resources.filter(r => r.status === 'pending');
@@ -738,10 +774,10 @@ export default function Library() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Recursos',      value: resources.length,                                    icon: BookOpen,  color: 'text-primary' },
-          { label: 'Destacados',    value: favCount,                                             icon: Bookmark,  color: 'text-yellow-400' },
-          { label: 'Mis recursos',  value: resources.filter(r => r.author_id === profile.user_id).length, icon: Star, color: 'text-green-500' },
-          { label: 'Total vistas',  value: resources.reduce((s, r) => s + (r.views || 0), 0),   icon: Eye,       color: 'text-purple-400' },
+          { label: 'Recursos',      value: visibleResources.length,                                          icon: BookOpen,  color: 'text-primary' },
+          { label: 'Destacados',    value: favCount,                                                          icon: Bookmark,  color: 'text-yellow-400' },
+          { label: 'Mis recursos',  value: resources.filter(r => r.author_id === profile.user_id).length,    icon: Star,      color: 'text-green-500' },
+          { label: 'Total vistas',  value: visibleResources.reduce((s, r) => s + (r.views || 0), 0),         icon: Eye,       color: 'text-purple-400' },
         ].map(s => (
           <div key={s.label} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
             <s.icon className={`h-5 w-5 shrink-0 ${s.color}`} />
@@ -928,21 +964,25 @@ export default function Library() {
                     </div>
                   )}
 
-                  {/* Footer: license + edit buttons */}
+                  {/* Footer: license + edit/delete buttons */}
                   <div className="flex items-center justify-between pt-2 border-t border-border/50">
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${licInfo.color}`}>
                       {licInfo.label}
                     </span>
-                    {canEdit(r) && (
+                    {(canEdit(r) || canDelete(r)) && (
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          onClick={e => { e.stopPropagation(); setEditResource(r); }}>
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
-                          onClick={e => { e.stopPropagation(); deleteResource(r); }}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        {canEdit(r) && (
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+                            onClick={e => { e.stopPropagation(); setEditResource(r); }}>
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {canDelete(r) && (
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
+                            onClick={e => { e.stopPropagation(); deleteResource(r); }}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
