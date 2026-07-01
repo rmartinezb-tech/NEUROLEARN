@@ -3,21 +3,22 @@ import { base44 } from '@/api/base44Client';
 import { Button } from "@/components/ui/button";
 import { motion } from 'framer-motion';
 
-// ─── constants ───────────────────────────────────────────────────────────────
-
+// ─── reward constants ─────────────────────────────────────────────────────────
 const XP_WIN  = 25;
+const XP_TIE  = 10;
 const XP_LOSE = 5;
 const SAB_WIN = 1;
 
+// ─── item labels ──────────────────────────────────────────────────────────────
 const ACHIEVEMENT_LABELS = {
-  first_session:          '🎯 Primera sesión',
-  streak_7:               '🔥 Racha 7 días',
-  streak_30:              '🏆 Racha 30 días',
-  accuracy_90:            '🎯 90% precisión',
-  total_100:              '📚 100 preguntas',
-  duel_winner:            '⚔️ Primer duelo ganado',
-  elaboration_published:  '💡 Primera elaboración',
-  tournament_winner:      '🏟️ Primer torneo ganado',
+  first_session:         '🎯 Primera sesión',
+  streak_7:              '🔥 Racha 7 días',
+  streak_30:             '🏆 Racha 30 días',
+  accuracy_90:           '🎯 90% precisión',
+  total_100:             '📚 100 preguntas',
+  duel_winner:           '⚔️ Primer duelo ganado',
+  elaboration_published: '💡 Primera elaboración',
+  tournament_winner:     '🏟️ Primer torneo ganado',
 };
 
 const EASTER_EGG_LABELS = {
@@ -28,8 +29,7 @@ const EASTER_EGG_LABELS = {
   curious_mind: '🔬 Mente Curiosa',
 };
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
+// ─── helpers ──────────────────────────────────────────────────────────────────
 function shuffleArr(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -39,44 +39,30 @@ function shuffleArr(arr) {
   return a;
 }
 
-/** Build the pool of items that can be stolen from the loser. */
 function buildStealPool(loserProfile) {
   const pool = [];
-
-  // Sabers: each saber is one entry (capped at 5 so they don't dominate)
   const sabers = loserProfile.sabers || 0;
   for (let i = 0; i < Math.min(sabers, 5); i++) {
     pool.push({ type: 'saber', key: 'saber', label: '⚔️ Sable' });
   }
-
-  // Achievements
   (loserProfile.achievements || []).forEach(key => {
     pool.push({ type: 'achievement', key, label: ACHIEVEMENT_LABELS[key] || `🏅 ${key}` });
   });
-
-  // Easter eggs
   (loserProfile.easter_eggs || []).forEach(key => {
     pool.push({ type: 'easter_egg', key, label: EASTER_EGG_LABELS[key] || `🥚 ${key}` });
   });
-
   return pool;
 }
 
-/**
- * Pick one random item and return the update objects for both profiles.
- * Returns { stolenItem, winnerUpdate, loserUpdate } or null if nothing to steal.
- */
 function computeSteal(winnerProfile, loserProfile) {
   const pool = buildStealPool(loserProfile);
-  if (pool.length === 0) return null;
-
+  if (!pool.length) return null;
   const stolenItem = pool[Math.floor(Math.random() * pool.length)];
   const winnerUpdate = {};
   const loserUpdate  = {};
-
   if (stolenItem.type === 'saber') {
     winnerUpdate.sabers = (winnerProfile.sabers || 0) + 1;
-    loserUpdate.sabers  = Math.max(0, (loserProfile.sabers  || 0) - 1);
+    loserUpdate.sabers  = Math.max(0, (loserProfile.sabers || 0) - 1);
   } else if (stolenItem.type === 'achievement') {
     loserUpdate.achievements = (loserProfile.achievements || []).filter(a => a !== stolenItem.key);
     if (!(winnerProfile.achievements || []).includes(stolenItem.key)) {
@@ -88,12 +74,30 @@ function computeSteal(winnerProfile, loserProfile) {
       winnerUpdate.easter_eggs = [...(winnerProfile.easter_eggs || []), stolenItem.key];
     }
   }
-
   return { stolenItem, winnerUpdate, loserUpdate };
 }
 
-// ─── component ───────────────────────────────────────────────────────────────
+/**
+ * Winner determination — called only when BOTH players have finished.
+ *
+ * Criteria (in order):
+ *  1. Most correct answers wins.
+ *  2. Tie on answers → fastest average response time wins.
+ *  3. Exact tie on both (times within 0.1s) → true draw (no steal, shared XP).
+ *
+ * Returns: { winnerId, loserId, isTie }
+ */
+function determineWinner(cScore, oScore, cAvg, oAvg, challengerId, opponentId) {
+  if (cScore > oScore) return { winnerId: challengerId, loserId: opponentId, isTie: false };
+  if (oScore > cScore) return { winnerId: opponentId,   loserId: challengerId, isTie: false };
+  // Tied on score — use response time
+  const timeDiff = Math.abs(cAvg - oAvg);
+  if (timeDiff < 0.1) return { winnerId: null, loserId: null, isTie: true };
+  if (cAvg < oAvg) return { winnerId: challengerId, loserId: opponentId, isTie: false };
+  return { winnerId: opponentId, loserId: challengerId, isTie: false };
+}
 
+// ─── component ────────────────────────────────────────────────────────────────
 export default function DuelArena({ duel, profile, onFinish }) {
   const [questions, setQuestions]     = useState([]);
   const [idx, setIdx]                 = useState(0);
@@ -102,15 +106,15 @@ export default function DuelArena({ duel, profile, onFinish }) {
   const [selectedOpt, setSelectedOpt] = useState(null);
   const [score, setScore]             = useState(0);
   const [done, setDone]               = useState(false);
-  const [resultDuel, setResultDuel]   = useState(null);   // full duel object once both have played
+  const [resultDuel, setResultDuel]   = useState(null);
 
-  const timerRef      = useRef(null);
-  const scoreRef      = useRef(0);
-  const timesRef      = useRef([]);
-  const finishingRef  = useRef(false);
-  const answeredRef   = useRef(false);
+  const timerRef     = useRef(null);
+  const scoreRef     = useRef(0);
+  const timesRef     = useRef([]);
+  const finishingRef = useRef(false);
+  const answeredRef  = useRef(false);
 
-  // ── load questions ──────────────────────────────────────────────────────────
+  // Load questions
   useEffect(() => {
     if (!duel?.questions?.length) return;
     base44.entities.Question.list('-created_date', 500).then(allQ => {
@@ -119,12 +123,13 @@ export default function DuelArena({ duel, profile, onFinish }) {
     });
   }, []);
 
-  // ── poll while waiting for opponent ────────────────────────────────────────
+  // Poll while waiting for opponent to finish
   useEffect(() => {
     if (!done || resultDuel) return;
     const iv = setInterval(async () => {
       const fresh = await base44.entities.Duel.get(duel.id);
-      if (fresh.winner_id) {
+      // Only show result once the duel is fully finalized
+      if (fresh.status === 'completed') {
         clearInterval(iv);
         setResultDuel(fresh);
       }
@@ -132,7 +137,7 @@ export default function DuelArena({ duel, profile, onFinish }) {
     return () => clearInterval(iv);
   }, [done, resultDuel]);
 
-  // ── per-question countdown ─────────────────────────────────────────────────
+  // Per-question countdown
   useEffect(() => {
     if (questions.length === 0 || done) return;
     answeredRef.current = false;
@@ -175,7 +180,7 @@ export default function DuelArena({ duel, profile, onFinish }) {
     else setIdx(next);
   };
 
-  // ── finalization ───────────────────────────────────────────────────────────
+  // ── Core finalization ─────────────────────────────────────────────────────
   const doFinish = async (finalScore) => {
     if (finishingRef.current) return;
     finishingRef.current = true;
@@ -186,61 +191,67 @@ export default function DuelArena({ duel, profile, onFinish }) {
     const avgTime = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 5;
     const accuracy = questions.length ? Math.round((finalScore / questions.length) * 100) : 0;
 
+    // Save MY score + played flag
     const myData = isChallenger
-      ? { challenger_score: finalScore, challenger_accuracy: accuracy, challenger_avg_time: +avgTime.toFixed(2) }
-      : { opponent_score:   finalScore, opponent_accuracy:   accuracy, opponent_avg_time:  +avgTime.toFixed(2) };
+      ? { challenger_score: finalScore, challenger_accuracy: accuracy,
+          challenger_avg_time: +avgTime.toFixed(2), challenger_played: true }
+      : { opponent_score:   finalScore, opponent_accuracy:   accuracy,
+          opponent_avg_time:  +avgTime.toFixed(2), opponent_played:   true };
 
     await base44.entities.Duel.update(duel.id, myData);
+
+    // Re-fetch to see current state
     const fresh = await base44.entities.Duel.get(duel.id);
 
-    const cScore   = isChallenger ? finalScore             : fresh.challenger_score;
-    const oScore   = isChallenger ? fresh.opponent_score   : finalScore;
-    const bothDone = cScore !== null && cScore !== undefined && oScore !== null && oScore !== undefined;
+    // ── GUARD: only finalize when BOTH have played ──────────────────────────
+    // Use the explicit boolean flags — immune to score = 0 confusion
+    const cPlayed = isChallenger ? true : (fresh.challenger_played === true);
+    const oPlayed = isChallenger ? (fresh.opponent_played === true) : true;
 
-    if (!bothDone) return; // waiting for opponent — polling will pick it up
+    if (!cPlayed || !oPlayed) {
+      // The other player hasn't finished yet — polling will pick it up
+      return;
+    }
 
-    // Race-condition guard: if winner already set, just display result
-    if (fresh.winner_id) {
+    // ── Race-condition guard ────────────────────────────────────────────────
+    if (fresh.status === 'completed') {
       setResultDuel(fresh);
       return;
     }
 
+    // ── Collect both scores ─────────────────────────────────────────────────
+    const cScore = isChallenger ? finalScore             : fresh.challenger_score;
+    const oScore = isChallenger ? fresh.opponent_score   : finalScore;
+    const cAvg   = isChallenger ? +avgTime.toFixed(2)   : (fresh.challenger_avg_time ?? 99);
+    const oAvg   = isChallenger ? (fresh.opponent_avg_time ?? 99) : +avgTime.toFixed(2);
+
     // ── Determine winner ────────────────────────────────────────────────────
-    const cAvg = isChallenger ? +avgTime.toFixed(2) : (fresh.challenger_avg_time ?? 99);
-    const oAvg = isChallenger ? (fresh.opponent_avg_time ?? 99) : +avgTime.toFixed(2);
-    const winnerId = cScore > oScore  ? fresh.challenger_id
-      : oScore > cScore               ? fresh.opponent_id
-      : cAvg <= oAvg                  ? fresh.challenger_id
-      :                                 fresh.opponent_id;
-    const loserId = winnerId === fresh.challenger_id ? fresh.opponent_id : fresh.challenger_id;
+    const { winnerId, loserId, isTie } = determineWinner(
+      cScore, oScore, cAvg, oAvg,
+      fresh.challenger_id, fresh.opponent_id,
+    );
 
-    // ── Load both profiles for reward/steal computation ─────────────────────
-    const [winnerList, loserList] = await Promise.all([
-      base44.entities.UserProfile.filter({ user_id: winnerId }),
-      base44.entities.UserProfile.filter({ user_id: loserId }),
+    // ── Load profiles for reward/steal ──────────────────────────────────────
+    const profileIds = isTie
+      ? [fresh.challenger_id, fresh.opponent_id]
+      : [winnerId, loserId];
+
+    const [p1List, p2List] = await Promise.all([
+      base44.entities.UserProfile.filter({ user_id: profileIds[0] }),
+      base44.entities.UserProfile.filter({ user_id: profileIds[1] }),
     ]);
-    const winnerProfile = winnerList[0] || {};
-    const loserProfile  = loserList[0]  || {};
+    const p1 = p1List[0] || {};
+    const p2 = p2List[0] || {};
+    const winnerProfile = isTie ? p1 : p1; // both cases: p1 = winner (or challenger for tie)
+    const loserProfile  = isTie ? p2 : p2;
 
-    // ── Steal one item from loser ────────────────────────────────────────────
-    const steal = computeSteal(winnerProfile, loserProfile);
+    // ── Steal (only on decisive win) ────────────────────────────────────────
+    const steal = isTie ? null : computeSteal(winnerProfile, loserProfile);
 
-    // ── Build profile updates ────────────────────────────────────────────────
-    const winnerUpdate = {
-      sabers:    (winnerProfile.sabers    || 0) + SAB_WIN,   // win bonus
-      duels_won: (winnerProfile.duels_won || 0) + 1,
-      xp:        (winnerProfile.xp        || 0) + XP_WIN,
-      ...(steal?.winnerUpdate || {}),                         // steal bonus
-    };
-    const loserUpdate = {
-      xp: (loserProfile.xp || 0) + XP_LOSE,
-      ...(steal?.loserUpdate || {}),
-    };
-
-    // ── Write final duel record ──────────────────────────────────────────────
+    // ── Build final duel record ─────────────────────────────────────────────
     const finalDuel = {
       status:           'completed',
-      winner_id:        winnerId,
+      winner_id:        winnerId ?? null,   // null for tie
       completed_at:     new Date().toISOString(),
       challenger_score: cScore,
       opponent_score:   oScore,
@@ -248,48 +259,70 @@ export default function DuelArena({ duel, profile, onFinish }) {
     };
     await base44.entities.Duel.update(duel.id, finalDuel);
 
-    // ── Apply profile updates ────────────────────────────────────────────────
+    // ── Apply rewards ───────────────────────────────────────────────────────
     const ops = [];
-    if (winnerList.length) ops.push(base44.entities.UserProfile.update(winnerProfile.id, winnerUpdate));
-    if (loserList.length)  ops.push(base44.entities.UserProfile.update(loserProfile.id,  loserUpdate));
 
-    const stealMsg = steal
-      ? ` Te robaron: ${steal.stolenItem.label} — ¡Estúdialo de vuelta para recuperarlo!`
-      : '';
-    const stealMsgWin = steal
-      ? ` Robaste: ${steal.stolenItem.label} ⚔️`
-      : '';
+    if (isTie) {
+      // Both get tie XP, no steal
+      if (p1List.length) ops.push(base44.entities.UserProfile.update(p1.id, { xp: (p1.xp || 0) + XP_TIE }));
+      if (p2List.length) ops.push(base44.entities.UserProfile.update(p2.id, { xp: (p2.xp || 0) + XP_TIE }));
+      ops.push(
+        base44.entities.Notification.create({ user_id: fresh.challenger_id, type: 'duel_result',
+          title: '⚔️ ¡Empate!', message: `Duelo vs ${fresh.opponent_name} — Empate. +${XP_TIE} XP`, is_read: false }),
+        base44.entities.Notification.create({ user_id: fresh.opponent_id, type: 'duel_result',
+          title: '⚔️ ¡Empate!', message: `Duelo vs ${fresh.challenger_name} — Empate. +${XP_TIE} XP`, is_read: false }),
+      );
+    } else {
+      // Winner rewards + steal bonus
+      const winnerUpdate = {
+        sabers:    (winnerProfile.sabers    || 0) + SAB_WIN,
+        duels_won: (winnerProfile.duels_won || 0) + 1,
+        xp:        (winnerProfile.xp        || 0) + XP_WIN,
+        ...(steal?.winnerUpdate || {}),
+      };
+      // Loser rewards
+      const loserUpdate = {
+        xp: (loserProfile.xp || 0) + XP_LOSE,
+        ...(steal?.loserUpdate || {}),
+      };
 
-    ops.push(
-      base44.entities.Notification.create({
-        user_id: fresh.challenger_id, type: 'duel_result', title: '⚔️ Resultado del duelo',
-        message: winnerId === fresh.challenger_id
-          ? `¡Ganaste! +${SAB_WIN} Saber +${XP_WIN} XP${stealMsgWin}`
-          : `Perdiste. +${XP_LOSE} XP.${stealMsg}`,
-        is_read: false,
-      }),
-      base44.entities.Notification.create({
-        user_id: fresh.opponent_id, type: 'duel_result', title: '⚔️ Resultado del duelo',
-        message: winnerId === fresh.opponent_id
-          ? `¡Ganaste! +${SAB_WIN} Saber +${XP_WIN} XP${stealMsgWin}`
-          : `Perdiste. +${XP_LOSE} XP.${stealMsg}`,
-        is_read: false,
-      }),
-    );
+      if (p1List.length) {
+        // p1 = winner
+        ops.push(base44.entities.UserProfile.update(p1.id, winnerUpdate));
+      }
+      if (p2List.length) {
+        // p2 = loser
+        ops.push(base44.entities.UserProfile.update(p2.id, loserUpdate));
+      }
+
+      const stealWinMsg  = steal ? ` Robaste: ${steal.stolenItem.label} ⚔️` : '';
+      const stealLoseMsg = steal ? ` Te robaron: ${steal.stolenItem.label} — ¡recupéralo estudiando!` : '';
+
+      ops.push(
+        base44.entities.Notification.create({ user_id: fresh.challenger_id, type: 'duel_result',
+          title: '⚔️ Resultado del duelo',
+          message: winnerId === fresh.challenger_id
+            ? `¡Ganaste vs ${fresh.opponent_name}! +${SAB_WIN} Saber +${XP_WIN} XP${stealWinMsg}`
+            : `Perdiste vs ${fresh.opponent_name}. +${XP_LOSE} XP${stealLoseMsg}`,
+          is_read: false }),
+        base44.entities.Notification.create({ user_id: fresh.opponent_id, type: 'duel_result',
+          title: '⚔️ Resultado del duelo',
+          message: winnerId === fresh.opponent_id
+            ? `¡Ganaste vs ${fresh.challenger_name}! +${SAB_WIN} Saber +${XP_WIN} XP${stealWinMsg}`
+            : `Perdiste vs ${fresh.challenger_name}. +${XP_LOSE} XP${stealLoseMsg}`,
+          is_read: false }),
+      );
+    }
 
     await Promise.all(ops);
 
-    setResultDuel({
-      ...fresh, ...finalDuel,
-      challenger_avg_time: cAvg,
-      opponent_avg_time:   oAvg,
-    });
+    setResultDuel({ ...fresh, ...finalDuel, challenger_avg_time: cAvg, opponent_avg_time: oAvg, _isTie: isTie });
   };
 
   // ─── RESULT SCREEN ─────────────────────────────────────────────────────────
   if (done && resultDuel) {
-    const won      = resultDuel.winner_id === profile.user_id;
-    const isTie    = resultDuel.challenger_score === resultDuel.opponent_score;
+    const isTie    = resultDuel._isTie || (resultDuel.winner_id === null && resultDuel.status === 'completed');
+    const won      = !isTie && resultDuel.winner_id === profile.user_id;
     const myScore  = duel.challenger_id === profile.user_id ? resultDuel.challenger_score : resultDuel.opponent_score;
     const theirScr = duel.challenger_id === profile.user_id ? resultDuel.opponent_score   : resultDuel.challenger_score;
     const theirNm  = duel.challenger_id === profile.user_id ? duel.opponent_name          : duel.challenger_name;
@@ -301,64 +334,66 @@ export default function DuelArena({ duel, profile, onFinish }) {
         className="max-w-md mx-auto text-center py-10 space-y-5"
       >
         <div className="text-7xl animate-float">{isTie ? '🤝' : won ? '🏆' : '💔'}</div>
-        <h1 className="text-3xl font-bold">{isTie ? '¡Empate!' : won ? '¡Victoria!' : 'Derrota'}</h1>
+        <h1 className="text-3xl font-bold">{isTie ? '¡Empate perfecto!' : won ? '¡Victoria!' : 'Derrota'}</h1>
 
         <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
           {/* Scores */}
           <div className="grid grid-cols-2 gap-3">
-            <div className={`rounded-xl p-4 ${won && !isTie ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted'}`}>
+            <div className={`rounded-xl p-4 ${won ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted'}`}>
               <p className="text-xs text-muted-foreground mb-1">Tú</p>
               <p className="text-3xl font-bold">{myScore}</p>
-              <p className="text-xs text-muted-foreground">/ {questions.length} pts</p>
+              <p className="text-xs text-muted-foreground">/ {questions.length} correctas</p>
             </div>
             <div className={`rounded-xl p-4 ${!won && !isTie ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted'}`}>
               <p className="text-xs text-muted-foreground mb-1">{theirNm}</p>
               <p className="text-3xl font-bold">{theirScr ?? '?'}</p>
-              <p className="text-xs text-muted-foreground">/ {questions.length} pts</p>
+              <p className="text-xs text-muted-foreground">/ {questions.length} correctas</p>
             </div>
           </div>
 
-          {/* XP / saber reward row */}
-          <div className={`rounded-xl p-3 text-sm font-medium ${won && !isTie ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-            {won && !isTie
-              ? <>+{SAB_WIN} Saber ⚔️ &nbsp;·&nbsp; +{XP_WIN} XP</>
-              : <> +{XP_LOSE} XP por participar</>
+          {/* Winner criteria explanation */}
+          <div className="bg-muted/50 rounded-xl p-3 text-xs text-muted-foreground text-left space-y-1">
+            {isTie
+              ? <p>🤝 Mismo puntaje <strong>y</strong> tiempo de respuesta casi idéntico — ¡empate puro!</p>
+              : won
+                ? myScore > (theirScr ?? 0)
+                  ? <p>🏆 Ganaste por <strong>más respuestas correctas</strong> ({myScore} vs {theirScr})</p>
+                  : <p>⏱️ Mismo puntaje — ganaste por <strong>tiempo de respuesta más rápido</strong></p>
+                : (theirScr ?? 0) > myScore
+                  ? <p>Perdiste por <strong>menos respuestas correctas</strong> ({myScore} vs {theirScr})</p>
+                  : <p>Mismo puntaje — perdiste por <strong>tiempo de respuesta más lento</strong></p>
+            }
+          </div>
+
+          {/* Reward */}
+          <div className={`rounded-xl p-3 text-sm font-medium ${
+            isTie ? 'bg-muted text-muted-foreground'
+            : won  ? 'bg-primary/10 text-primary'
+            :        'bg-muted text-muted-foreground'
+          }`}>
+            {isTie ? <>🤝 +{XP_TIE} XP (empate)</>
+             : won  ? <>+{SAB_WIN} Saber ⚔️ &nbsp;·&nbsp; +{XP_WIN} XP</>
+             :        <>+{XP_LOSE} XP por participar</>
             }
           </div>
 
           {/* Steal banner */}
-          {stolen && (
-            <div className={`rounded-xl p-4 border text-sm space-y-1 ${won && !isTie
+          {stolen && !isTie && (
+            <div className={`rounded-xl p-4 border text-sm space-y-1 text-left ${won
               ? 'bg-green-500/10 border-green-500/30 text-green-400'
               : 'bg-red-500/10 border-red-500/30 text-red-400'}`}
             >
-              {won && !isTie ? (
-                <>
-                  <p className="font-bold">⚔️ ¡Robaste un trofeo!</p>
+              {won ? (
+                <><p className="font-bold">⚔️ ¡Robaste un trofeo!</p>
                   <p>{stolen.label}</p>
-                  <p className="text-xs opacity-70">Ahora forma parte de tu repertorio</p>
-                </>
+                  <p className="text-xs opacity-70">Ahora forma parte de tu repertorio</p></>
               ) : (
-                <>
-                  <p className="font-bold">💀 Te robaron un trofeo</p>
+                <><p className="font-bold">💀 Te robaron un trofeo</p>
                   <p>{stolen.label}</p>
-                  <p className="text-xs opacity-70">¡Estudia duro y recupéralo ganando un duelo!</p>
-                </>
+                  <p className="text-xs opacity-70">¡Estudia duro y recupéralo ganando un duelo!</p></>
               )}
             </div>
           )}
-
-          {!stolen && !isTie && !won && (
-            <p className="text-xs text-muted-foreground">
-              No tenías ítems que robar esta vez — ¡pero puedes perderlos en el futuro!
-            </p>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            {isTie  ? 'Empate en puntos — el tiempo de respuesta fue el desempate.'
-             : won  ? 'Tu velocidad de respuesta hizo la diferencia.'
-             :        'Practica más y vuelve a retar.'}
-          </p>
         </div>
 
         <Button onClick={onFinish} className="w-full rounded-xl">Volver a Duelos</Button>
@@ -385,7 +420,7 @@ export default function DuelArena({ duel, profile, onFinish }) {
           <div className="border-t border-border pt-4 space-y-2">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-sm text-muted-foreground">
-              Esperando que <span className="font-semibold text-foreground">{opponentName}</span> juegue...
+              Esperando que <span className="font-semibold text-foreground">{opponentName}</span> termine...
             </p>
             <p className="text-xs text-muted-foreground">El resultado aparecerá automáticamente</p>
           </div>
