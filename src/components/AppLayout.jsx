@@ -85,6 +85,17 @@ export default function AppLayout() {
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Refresh profile in context when StudyEngine (or anything) updates it in DB
+  useEffect(() => {
+    if (!profile?.id) return;
+    const unsub = base44.entities.UserProfile.subscribe((event) => {
+      if (event.data?.user_id === profile.user_id) {
+        setProfile(prev => prev ? { ...prev, ...event.data } : event.data);
+      }
+    });
+    return unsub;
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Heartbeat: keep last_active fresh every 30 s so other users see us as online.
   // On tab close, use fetch+keepalive (browser-guaranteed delivery even after unload).
   useEffect(() => {
