@@ -401,6 +401,16 @@ NOTAS IMPORTANTES
         <h1 className="text-2xl font-space font-bold">📥 Importación Masiva</h1>
         <div className="flex gap-2">
           <AIDisclaimerButton />
+          <a
+            href="https://dgyjmpmobaufezzxftbu.supabase.co/storage/v1/object/public/neurolearn-files/neurolearn-question-generator%20(2).zip"
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" className="gap-2 rounded-xl bg-primary/10 border-primary/30 hover:bg-primary/20 text-primary">
+              <Download className="h-4 w-4" /> Descargar Generador
+            </Button>
+          </a>
           <Button variant="outline" onClick={downloadInstructions} className="gap-2 rounded-xl">
             <BookOpen className="h-4 w-4" /> Descargar Instrucciones
           </Button>
