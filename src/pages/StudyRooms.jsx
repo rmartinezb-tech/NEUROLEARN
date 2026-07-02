@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Send, Plus, Users, X } from 'lucide-react';
+import { Send, Plus, Users, X, Trash2 } from 'lucide-react';
 import { toast } from "sonner";
 import moment from 'moment';
 
@@ -22,7 +22,8 @@ const isParticipantActive = (p) => {
 };
 
 export default function StudyRooms() {
-  const { profile } = useOutletContext();
+  const { profile, user } = useOutletContext();
+  const isAdminOrMentor = user?.role === 'admin' || user?.role === 'mentor';
   const [rooms, setRooms] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [roomData, setRoomData] = useState(null);
@@ -111,6 +112,15 @@ export default function StudyRooms() {
     setRoomData(prev => ({ ...prev, messages }));
   };
 
+  const deleteRoom = async (room) => {
+    if (activeRoom === room.id) {
+      await leaveRoom();
+    }
+    await base44.entities.StudyRoom.delete(room.id);
+    toast.success('Sala eliminada');
+    loadRooms();
+  };
+
   const createRoom = async () => {
     if (!newRoom.name.trim()) return;
     await base44.entities.StudyRoom.create({ ...newRoom, is_active: true, participants: [], messages: [], created_by: profile.user_id });
@@ -129,7 +139,14 @@ export default function StudyRooms() {
             <h2 className="font-bold text-lg">{roomData.name}</h2>
             <p className="text-sm text-muted-foreground">{roomData.subject} • {activeParticipants.length} participante{activeParticipants.length !== 1 ? 's' : ''} en línea</p>
           </div>
-          <Button variant="outline" onClick={leaveRoom} className="rounded-xl"><X className="mr-2 h-4 w-4" />Salir</Button>
+          <div className="flex items-center gap-2">
+            {isAdminOrMentor && (
+              <Button variant="outline" onClick={() => deleteRoom(roomData)} className="rounded-xl text-red-500 border-red-400/30 hover:bg-red-500/10">
+                <Trash2 className="mr-2 h-4 w-4" />Eliminar sala
+              </Button>
+            )}
+            <Button variant="outline" onClick={leaveRoom} className="rounded-xl"><X className="mr-2 h-4 w-4" />Salir</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
@@ -211,7 +228,14 @@ export default function StudyRooms() {
                   </div>
                   {room.description && <p className="text-xs text-muted-foreground mt-1">{room.description}</p>}
                 </div>
-                <Button onClick={() => joinRoom(room)} className="rounded-xl" size="sm">Unirse</Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => joinRoom(room)} className="rounded-xl" size="sm">Unirse</Button>
+                  {isAdminOrMentor && (
+                    <Button onClick={() => deleteRoom(room)} variant="outline" size="sm" className="rounded-xl text-red-500 border-red-400/30 hover:bg-red-500/10">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}
