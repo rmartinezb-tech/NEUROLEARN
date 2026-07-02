@@ -20,7 +20,7 @@ const typeLabels = {
   clinical_case: 'Caso Clínico', flashcard: 'Flashcard',
 };
 
-export default function QuestionRenderer({ question, onAnswer, onReveal, answered, isCorrect }) {
+export default function QuestionRenderer({ question, onAnswer, onReveal, answered, isCorrect, onFlag, flagged }) {
   const [selected, setSelected] = useState(null);
   const [textAnswer, setTextAnswer] = useState('');
   const [flipped, setFlipped] = useState(false);
@@ -338,8 +338,12 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
         </span>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{question.subject}</span>
-          <button className="text-muted-foreground hover:text-red-500 transition-colors">
-            <Flag className="h-4 w-4" />
+          <button
+            onClick={() => !flagged && onFlag?.(question.id)}
+            title={flagged ? 'Reportado' : 'Reportar pregunta'}
+            className={`transition-colors ${flagged ? 'cursor-default' : 'hover:text-red-500'}`}
+          >
+            <Flag className={`h-4 w-4 ${flagged ? 'fill-white text-white drop-shadow' : 'text-muted-foreground'}`} />
           </button>
         </div>
       </div>
