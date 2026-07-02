@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +12,8 @@ import { toast } from "sonner";
 import moment from 'moment';
 
 const SUBJECTS = ['Neurociencias', 'Cuidados de la Salud', 'Ciencias Biomédicas', 'General', 'Otras'];
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
 
-const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 min — matches AppLayout heartbeat interval
-
-// Participant is active if they have a recent last_active timestamp.
-// Legacy entries without the field are shown (backward compat).
 const isParticipantActive = (p) => {
   if (!p.last_active) return true;
   return Date.now() - new Date(p.last_active).getTime() < ONLINE_THRESHOLD_MS;
@@ -31,24 +29,26 @@ export default function StudyRooms() {
   const [showCreate, setShowCreate] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', subject: 'General', description: '' });
   const messagesEndRef = useRef();
+  const broadcastRef = useRef(null); // Supabase Broadcast channel for instant messages
 
+  // Load room list + subscribe to room list changes (create/delete/participant updates)
   useEffect(() => {
     loadRooms();
     const unsub = base44.entities.StudyRoom.subscribe((event) => {
       loadRooms();
-      if (activeRoom && event.data?.id === activeRoom) {
-        setRoomData(event.data);
+      // Update participants from Postgres Changes (messages handled by Broadcast)
+      if (activeRoom && event.data?.id === activeRoom && event.data?.participants) {
+        setRoomData(prev => prev ? { ...prev, participants: event.data.participants } : prev);
       }
     });
     return unsub;
-  }, [activeRoom]);
+  }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [roomData?.messages]);
 
-  // Heartbeat: update our last_active in the room every 30 s so others see us as present.
-  // Also cleans up any participants that have gone stale in the same pass.
+  // Heartbeat: keep last_active fresh every 30s
   useEffect(() => {
     if (!activeRoom) return;
     const beat = setInterval(async () => {
@@ -71,11 +71,15 @@ export default function StudyRooms() {
   };
 
   const joinRoom = async (room) => {
-    // Remove stale participants + remove self (will be re-added below with fresh timestamp)
+    // Clean up any previous broadcast channel
+    if (broadcastRef.current) {
+      supabase.removeChannel(broadcastRef.current);
+      broadcastRef.current = null;
+    }
+
     const freshParticipants = (room.participants || [])
       .filter(p => p.user_id !== profile.user_id)
       .filter(isParticipantActive);
-
     freshParticipants.push({
       user_id: profile.user_id,
       display_name: profile.display_name,
@@ -85,12 +89,34 @@ export default function StudyRooms() {
       current_activity: 'Estudiando',
     });
     await base44.entities.StudyRoom.update(room.id, { participants: freshParticipants });
+
+    // Set up Broadcast channel for instant messages
+    const channel = supabase
+      .channel(`room:${room.id}`)
+      .on('broadcast', { event: 'message' }, ({ payload }) => {
+        // Ignore own messages (already added optimistically)
+        if (payload.msg?.user_id === profile.user_id) return;
+        setRoomData(prev => {
+          if (!prev) return prev;
+          const exists = (prev.messages || []).some(m => m.id === payload.msg.id);
+          if (exists) return prev;
+          return { ...prev, messages: [...(prev.messages || []), payload.msg] };
+        });
+      })
+      .subscribe();
+
+    broadcastRef.current = channel;
     setActiveRoom(room.id);
     setRoomData({ ...room, participants: freshParticipants });
   };
 
   const leaveRoom = async () => {
     if (!roomData) return;
+    // Clean up broadcast channel
+    if (broadcastRef.current) {
+      supabase.removeChannel(broadcastRef.current);
+      broadcastRef.current = null;
+    }
     const participants = (roomData.participants || []).filter(p => p.user_id !== profile.user_id);
     await base44.entities.StudyRoom.update(roomData.id, { participants });
     setActiveRoom(null);
@@ -99,31 +125,49 @@ export default function StudyRooms() {
 
   const sendMessage = async () => {
     if (!message.trim() || !roomData) return;
-    const messages = [...(roomData.messages || []), {
+    const newMsg = {
       id: Date.now().toString(),
       user_id: profile.user_id,
       user_name: profile.display_name,
       avatar_emoji: profile.avatar_emoji,
       text: message,
       created_at: new Date().toISOString(),
-    }];
-    await base44.entities.StudyRoom.update(roomData.id, { messages });
-    setMessage('');
+    };
+    const messages = [...(roomData.messages || []), newMsg];
+
+    // 1. Show to self immediately (optimistic)
     setRoomData(prev => ({ ...prev, messages }));
+    setMessage('');
+
+    // 2. Broadcast to all others in the room (instant, no latency)
+    if (broadcastRef.current) {
+      broadcastRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: { msg: newMsg },
+      });
+    }
+
+    // 3. Persist to DB
+    await base44.entities.StudyRoom.update(roomData.id, { messages });
   };
 
   const deleteRoom = async (room) => {
-    if (activeRoom === room.id) {
-      await leaveRoom();
+    try {
+      if (activeRoom === room.id) await leaveRoom();
+      await base44.entities.StudyRoom.delete(room.id);
+      toast.success('Sala eliminada');
+      loadRooms();
+    } catch (err) {
+      toast.error('Error al eliminar: ' + err.message);
     }
-    await base44.entities.StudyRoom.delete(room.id);
-    toast.success('Sala eliminada');
-    loadRooms();
   };
 
   const createRoom = async () => {
     if (!newRoom.name.trim()) return;
-    await base44.entities.StudyRoom.create({ ...newRoom, is_active: true, participants: [], messages: [], created_by: profile.user_id });
+    await base44.entities.StudyRoom.create({
+      ...newRoom, is_active: true, participants: [], messages: [], created_by: profile.user_id,
+    });
     toast.success('Sala creada');
     setShowCreate(false);
     setNewRoom({ name: '', subject: 'General', description: '' });
@@ -137,7 +181,9 @@ export default function StudyRooms() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-bold text-lg">{roomData.name}</h2>
-            <p className="text-sm text-muted-foreground">{roomData.subject} • {activeParticipants.length} participante{activeParticipants.length !== 1 ? 's' : ''} en línea</p>
+            <p className="text-sm text-muted-foreground">
+              {roomData.subject} • {activeParticipants.length} participante{activeParticipants.length !== 1 ? 's' : ''} en línea
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {isAdminOrMentor && (
@@ -145,7 +191,9 @@ export default function StudyRooms() {
                 <Trash2 className="mr-2 h-4 w-4" />Eliminar sala
               </Button>
             )}
-            <Button variant="outline" onClick={leaveRoom} className="rounded-xl"><X className="mr-2 h-4 w-4" />Salir</Button>
+            <Button variant="outline" onClick={leaveRoom} className="rounded-xl">
+              <X className="mr-2 h-4 w-4" />Salir
+            </Button>
           </div>
         </div>
 
@@ -169,6 +217,11 @@ export default function StudyRooms() {
           {/* Chat */}
           <div className="lg:col-span-3 bg-card border border-border rounded-xl flex flex-col">
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(roomData.messages || []).length === 0 && (
+                <p className="text-center text-muted-foreground text-sm py-8">
+                  Sé el primero en escribir un mensaje 💬
+                </p>
+              )}
               {(roomData.messages || []).map(msg => (
                 <div key={msg.id} className={`flex gap-2 ${msg.user_id === profile.user_id ? 'flex-row-reverse' : ''}`}>
                   <span className="text-xl shrink-0">{msg.avatar_emoji || '👤'}</span>
@@ -184,8 +237,16 @@ export default function StudyRooms() {
               <div ref={messagesEndRef} />
             </div>
             <div className="p-3 border-t border-border flex gap-2">
-              <Input value={message} onChange={e => setMessage(e.target.value)} placeholder="Escribe un mensaje..." className="rounded-xl" onKeyDown={e => e.key === 'Enter' && sendMessage()} />
-              <Button onClick={sendMessage} className="rounded-xl shrink-0"><Send className="h-4 w-4" /></Button>
+              <Input
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Escribe un mensaje..."
+                className="rounded-xl"
+                onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              />
+              <Button onClick={sendMessage} className="rounded-xl shrink-0">
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -200,7 +261,9 @@ export default function StudyRooms() {
           <h1 className="text-2xl font-space font-bold">🏠 Salas de Estudio</h1>
           <p className="text-sm text-muted-foreground">Estudia en tiempo real con otros usuarios</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Crear Sala</Button>
+        <Button onClick={() => setShowCreate(true)} className="rounded-xl">
+          <Plus className="mr-2 h-4 w-4" />Crear Sala
+        </Button>
       </div>
 
       {rooms.length === 0 ? (
@@ -246,14 +309,21 @@ export default function StudyRooms() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Crear Sala de Estudio</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Nombre</Label><Input value={newRoom.name} onChange={e => setNewRoom(p => ({ ...p, name: e.target.value }))} className="mt-1 rounded-xl" /></div>
-            <div><Label>Materia</Label>
+            <div>
+              <Label>Nombre</Label>
+              <Input value={newRoom.name} onChange={e => setNewRoom(p => ({ ...p, name: e.target.value }))} className="mt-1 rounded-xl" />
+            </div>
+            <div>
+              <Label>Materia</Label>
               <Select value={newRoom.subject} onValueChange={v => setNewRoom(p => ({ ...p, subject: v }))}>
                 <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>{SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Descripción (opcional)</Label><Input value={newRoom.description} onChange={e => setNewRoom(p => ({ ...p, description: e.target.value }))} className="mt-1 rounded-xl" /></div>
+            <div>
+              <Label>Descripción (opcional)</Label>
+              <Input value={newRoom.description} onChange={e => setNewRoom(p => ({ ...p, description: e.target.value }))} className="mt-1 rounded-xl" />
+            </div>
             <Button onClick={createRoom} className="w-full rounded-xl" disabled={!newRoom.name.trim()}>Crear Sala</Button>
           </div>
         </DialogContent>
