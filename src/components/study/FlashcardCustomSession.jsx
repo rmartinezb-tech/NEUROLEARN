@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Palette, CheckSquare, Square, RotateCcw, Play, Shuffle, Pause } from 'lucide-react';
+import { ChevronLeft, Palette, CheckSquare, Square, RotateCcw, Play, Shuffle, Pause, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { SUBJECTS, NumericInput, DurationBadge } from './SessionConfigHelpers';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -407,10 +408,26 @@ function StudyPhase({ questions, styles, config, profile, onBack }) {
   useEffect(() => { statsRef.current = stats; }, [stats]);
 
   const [fatigueModal, setFatigueModal] = useState(false);
+  const [flaggedIds, setFlaggedIds] = useState(new Set());
   const sessionSavedRef = useRef(false);
   const lastAnswerTimeRef = useRef(Date.now());
   const timerRef = useRef(null);
   const breakTimerRef = useRef(null);
+
+  const handleFlag = async (qId) => {
+    if (flaggedIds.has(qId)) return;
+    setFlaggedIds(prev => new Set([...prev, qId]));
+    toast.success('Reporte enviado ✓', { duration: 2000 });
+    try {
+      await base44.entities.QuestionReport.create({
+        question_id: qId,
+        reported_by: profile?.user_id ?? null,
+        reason: 'flagged_in_session',
+        status: 'pending',
+      });
+      await base44.entities.Question.update(qId, { is_reported: true });
+    } catch (_) {}
+  };
 
   // Current card
   const currentEntry = studyQueue[0] || null;
@@ -712,7 +729,14 @@ function StudyPhase({ questions, styles, config, profile, onBack }) {
                 initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.2 }}
                 style={{ backgroundColor: cardStyle.front.bg }}
-                className="rounded-2xl p-8 min-h-[220px] flex flex-col items-center justify-center text-center border border-black/10 shadow-lg gap-4">
+                className="relative rounded-2xl p-8 min-h-[220px] flex flex-col items-center justify-center text-center border border-black/10 shadow-lg gap-4">
+                <button
+                  onClick={() => handleFlag(currentQ.id)}
+                  title={flaggedIds.has(currentQ.id) ? 'Reporte enviado' : 'Reportar pregunta'}
+                  className={`absolute top-3 right-3 rounded-full p-1.5 transition-all ${flaggedIds.has(currentQ.id) ? 'bg-red-500 cursor-default' : 'bg-black/10 hover:bg-red-500'}`}
+                >
+                  <Flag className={`h-3.5 w-3.5 ${flaggedIds.has(currentQ.id) ? 'fill-white text-white' : 'text-black/40 hover:text-white'}`} />
+                </button>
                 <p className="text-xs font-bold uppercase tracking-widest text-black/30 mb-2">Pregunta</p>
                 <StyledText text={qText(currentQ)} side={cardStyle.front} className="text-black" />
                 <Button onClick={() => setFlipped(true)} variant="outline"

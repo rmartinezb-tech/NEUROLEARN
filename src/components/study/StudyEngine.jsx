@@ -49,22 +49,6 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
   // ---- Stats ----
   const [stats, setStats] = useState({ correct: 0, incorrect: 0, total: 0, xp: 0, startTime: Date.now(), answers: [], responseTimes: [] });
 
-  // ---- Flagged questions ----
-  const [flaggedIds, setFlaggedIds] = useState(new Set());
-
-  const handleFlag = async (questionId) => {
-    if (flaggedIds.has(questionId)) return;
-    setFlaggedIds(prev => new Set([...prev, questionId]));
-    try {
-      await base44.entities.QuestionReport.create({
-        question_id: questionId,
-        reported_by: profile?.user_id,
-        reason: 'flagged_in_session',
-        status: 'pending',
-      });
-      await base44.entities.Question.update(questionId, { is_reported: true });
-    } catch (_) { /* ignore */ }
-  };
   const [muted, setMuted] = useState(false);
   const [fatigueModal, setFatigueModal] = useState(false);
   const lastAnswerTimeRef = useRef(Date.now());
@@ -418,8 +402,7 @@ export default function StudyEngine({ questions, profile, sessionType, config: c
               onReveal={() => setRevealedAnswer(true)}
               answered={answered}
               isCorrect={isCorrect}
-              onFlag={handleFlag}
-              flagged={flaggedIds.has(currentQ?.id)}
+              userId={profile?.user_id}
             />
           </motion.div>
         </AnimatePresence>

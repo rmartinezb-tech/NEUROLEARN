@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
+import { base44 } from '@/api/base44Client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Flag, CheckCircle, XCircle, HelpCircle, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 function shuffleArr(arr) {
   const a = [...arr];
@@ -20,7 +22,23 @@ const typeLabels = {
   clinical_case: 'Caso Clínico', flashcard: 'Flashcard',
 };
 
-export default function QuestionRenderer({ question, onAnswer, onReveal, answered, isCorrect, onFlag, flagged }) {
+export default function QuestionRenderer({ question, onAnswer, onReveal, answered, isCorrect, userId }) {
+  const [flagged, setFlagged] = useState(false);
+
+  const handleFlag = async () => {
+    if (flagged) return;
+    setFlagged(true);
+    toast.success('Reporte enviado ✓', { duration: 2000 });
+    try {
+      await base44.entities.QuestionReport.create({
+        question_id: question.id,
+        reported_by: userId ?? null,
+        reason: 'flagged_in_session',
+        status: 'pending',
+      });
+      await base44.entities.Question.update(question.id, { is_reported: true });
+    } catch (_) { /* ignore — visual feedback already shown */ }
+  };
   const [selected, setSelected] = useState(null);
   const [textAnswer, setTextAnswer] = useState('');
   const [flipped, setFlipped] = useState(false);
@@ -339,11 +357,11 @@ export default function QuestionRenderer({ question, onAnswer, onReveal, answere
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{question.subject}</span>
           <button
-            onClick={() => !flagged && onFlag?.(question.id)}
-            title={flagged ? 'Reportado' : 'Reportar pregunta'}
-            className={`transition-colors ${flagged ? 'cursor-default' : 'hover:text-red-500'}`}
+            onClick={handleFlag}
+            title={flagged ? 'Reporte enviado' : 'Reportar pregunta'}
+            className={`rounded-full p-1 transition-all ${flagged ? 'bg-red-500 cursor-default' : 'hover:bg-red-500/10'}`}
           >
-            <Flag className={`h-4 w-4 ${flagged ? 'fill-white text-white drop-shadow' : 'text-muted-foreground'}`} />
+            <Flag className={`h-4 w-4 ${flagged ? 'fill-white text-white' : 'text-muted-foreground hover:text-red-500'}`} />
           </button>
         </div>
       </div>
