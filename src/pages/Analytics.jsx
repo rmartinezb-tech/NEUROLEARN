@@ -323,14 +323,27 @@ export default function Analytics() {
     })
   , [allAnswers, questionMap]); // eslint-disable-line
 
+  // ── Entrelazado: count from sessions (profile context is stale after session completion) ──
+  const interleavedCount = useMemo(() =>
+    sessions.filter(s => s.is_interleaved).length
+  , [sessions]);
+
+  // ── Unique study days from sessions ──
+  const uniqueStudyDays = useMemo(() => {
+    const days = new Set(
+      sessions.filter(s => s.completed_at).map(s => new Date(s.completed_at).toDateString())
+    );
+    return days.size;
+  }, [sessions]);
+
   // ── Radar ──
   const radarData = useMemo(() => [
     { skill: 'Precisión',   value: globalAccuracy },
     { skill: 'Evocación',   value: Math.min(evocationData.pct, 100) },
     { skill: 'Elaboración', value: Math.min((profile?.elaboration_points || 0) * 5, 100) },
-    { skill: 'Espaciado',   value: Math.min((profile?.unique_study_days || 0) * 5, 100) },
-    { skill: 'Entrelazado', value: Math.min(profile?.interleaved_sessions || 0, 100) },
-  ], [globalAccuracy, evocationData, profile]);
+    { skill: 'Espaciado',   value: Math.min(uniqueStudyDays * 5, 100) },
+    { skill: 'Entrelazado', value: Math.min(interleavedCount, 100) },
+  ], [globalAccuracy, evocationData, profile, interleavedCount, uniqueStudyDays]);
 
   // ── Line chart: sessions over time ──
   const lineData = useMemo(() =>
@@ -564,9 +577,9 @@ export default function Analytics() {
       {/* ── Line chart: evolution ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="font-semibold text-sm mb-4">📈 Evolución de XP y Precisión (últimas 40 sesiones)</h3>
-        {lineData.length < 2 ? (
+        {lineData.length === 0 ? (
           <p className="text-center text-muted-foreground py-8 text-sm">
-            Completá al menos 2 sesiones para ver tu evolución.
+            Completá al menos una sesión para ver tu evolución.
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={210}>
