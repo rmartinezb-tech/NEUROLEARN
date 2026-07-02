@@ -1,5 +1,6 @@
 # CONTEXT_AGENTE.md — Estado actual de NEUROLEARN
 > Este archivo fue generado para que un nuevo agente pueda continuar el trabajo sin perder contexto.
+> Última actualización: 2026-07-01 — Claude Sonnet 4.6 (Claude Code, VS Code Extension)
 
 ---
 
@@ -10,7 +11,7 @@
 - **Repositorio GitHub:** `https://github.com/rmartinezb-tech/NEUROLEARN`
 - **App publicada:** `https://neurolearn-five.vercel.app`
 - **Base de datos:** Supabase — proyecto ID `dgyjmpmobaufezzxftbu` (región: São Paulo)
-- **Directorio local:** `c:\Users\MARBECK\Desktop\Repo\NEUROLEARN`
+- **Directorio local (computador actual):** `c:\Users\Rosi\Desktop\Repositorio\NEUROLEARN`
 
 ---
 
@@ -23,7 +24,7 @@
 | UI | Radix UI + Tailwind CSS + shadcn/ui |
 | Data/Auth | Supabase (`@supabase/supabase-js`) |
 | Animaciones | Framer Motion |
-| Deploy | Vercel (conectado al repo de GitHub, auto-deploy en push) |
+| Deploy | Vercel (conectado al repo de GitHub, auto-deploy en push a `main`) |
 
 ---
 
@@ -35,179 +36,89 @@
 - [x] **Auth con email/password** funcionando en producción
 - [x] **App publicada en Vercel** accesible desde cualquier dispositivo/red
 - [x] **Variables de entorno configuradas** en Vercel (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-- [x] **URL Configuration en Supabase** apuntando a `https://neurolearn-five.vercel.app`
 
-### Código
-- [x] `src/api/supabaseClient.js` — instancia de Supabase
-- [x] `src/api/supabaseAdapter.js` — adapter completo con interfaz idéntica al SDK de Base44 (drop-in replacement). Todas las páginas siguen usando `base44.entities.X.list()` etc. sin cambios
-- [x] `src/api/base44Client.js` — ahora solo reexporta el supabaseAdapter: `export const base44 = supabaseAdapter`
-- [x] `src/lib/AuthContext.jsx` — reescrito para usar `supabase.auth.getSession()` y `onAuthStateChange`
-- [x] `vite.config.js` — limpio, sin el plugin de Base44
-- [x] `src/components/UserNotRegisteredError.jsx` — se agregó `export default` que faltaba
-- [x] Botón de Google OAuth **ocultado temporalmente** en `SignIn.jsx` y `Register.jsx`
-- [x] `src/pages/LearningPaths.jsx` — **eliminado** (módulo desconectado que el usuario quería borrar)
+### API layer
+- [x] `src/api/supabaseClient.js` — instancia de Supabase; también importable directamente:
+  ```js
+  import { supabase } from '@/api/supabaseClient';
+  ```
+- [x] `src/api/supabaseAdapter.js` — adapter completo con interfaz idéntica al SDK de Base44 (drop-in replacement). Todas las páginas usan `base44.entities.X.list()` etc.
+- [x] `src/api/base44Client.js` — reexporta el supabaseAdapter: `export const base44 = supabaseAdapter`
+- [x] `src/lib/AuthContext.jsx` — usa `supabase.auth.getSession()` y `onAuthStateChange`
 
-### Supabase configurado
-- [x] Tablas creadas (ver `supabase_schema.sql` en la raíz del proyecto)
-- [x] RLS habilitado en todas las tablas
-- [x] Bucket de Storage `neurolearn-files` creado (público)
-- [x] "Confirm email" desactivado (para evitar rate limit de 2 emails/hora del free tier)
-- [x] Realtime pendiente de verificar (ver sección de pendientes)
+### Código — implementaciones recientes (commits en `main`)
+- [x] **StudyRooms real-time** (`src/pages/StudyRooms.jsx`) — implementación dual:
+  - Capa 1: **Supabase Broadcast** en canal `chat:{roomId}` para entrega instantánea (<100ms)
+  - Capa 2: **Polling directo** a `supabase.from('study_rooms').select()` cada 1 segundo como fallback garantizado
+  - `sendMessage`: optimistic update + broadcast + persist en DB
+- [x] **Flag/bandera en QuestionRenderer** (`src/components/study/QuestionRenderer.jsx`) — botón autocontenido:
+  - Crea `QuestionReport` en Supabase al hacer click
+  - Actualiza `Question.is_reported = true`
+  - Muestra toast "Reporte enviado ✓"
+  - Bandera se vuelve roja con ícono blanco (visual feedback)
+  - Recibe `userId` como prop desde `StudyEngine`
+- [x] **Flag/bandera en FlashcardCustomSession** (`src/components/study/FlashcardCustomSession.jsx`) — implementación separada porque tiene su propio renderer:
+  - `flaggedIds` Set state para trackear cuáles ya fueron reportadas
+  - `handleFlag(qId)` crea QuestionReport + actualiza Question + toast
+  - Botón absolutamente posicionado top-right en la carta
+- [x] **StudyEngine** (`src/components/study/StudyEngine.jsx`) — pasa `userId={profile?.user_id}` a QuestionRenderer
+- [x] **Reports** (`src/pages/Reports.jsx`) — funciona sin cambios; lee QuestionReport con `list('-created_date', 100)`; muestra tabs pendientes/resueltos; solo visible para admin/mentor
 
 ---
 
-## Lo que falta ❌
+## Estado del Deploy en Vercel ⚠️
 
-### 1. Edge Functions de IA — CRÍTICO
-Es la funcionalidad más importante pendiente. Sin esto, estas páginas dan error:
+Hubo un problema de deploy donde Production estaba atascado en commit `82c837c` mientras los commits nuevos ya habían sido pusheados a `main`. Los commits recientes incluyen:
+
+```
+964a67d  Fix flag button: self-contained report creation in QuestionRenderer and FlashcardCustomSession
+3aa7767  Fix flag button in study sessions: create QuestionReport and show filled white flag
+8073d43  StudyRooms: Broadcast + 1s direct Supabase polling for real-time messages
+3ee966e  Rewrite StudyRooms real-time: direct Supabase channel + polling fallback
+dc71079  Reduce polling interval to 1.5s for more responsive chat
+```
+
+**Para verificar:** Ir a Vercel dashboard → Deployments y confirmar que el commit más reciente esté en Production. Si hay un build fallado, revisar los logs.
+
+---
+
+## Lo que falta / Pendiente ❌
+
+### 1. Verificar funcionamiento real en producción
+Una vez confirmado el deploy:
+- [ ] **StudyRooms**: Abrir la sala en dos dispositivos/navegadores y confirmar que los mensajes aparecen sin recargar la página
+- [ ] **Flag button**: Click en la banderita → debe aparecer "Reporte enviado ✓" (toast), bandera se pone roja/blanca
+- [ ] **Reports**: Como admin/mentor, confirmar que los reportes creados aparecen en `/reports`
+
+### 2. Posible problema de RLS en question_reports
+Si la banderita da error silencioso (falla el create pero no se muestra error porque está en try/catch), puede ser que RLS bloquee el INSERT. Ejecutar en Supabase SQL Editor:
+
+```sql
+-- Verificar si hay política de INSERT:
+SELECT * FROM pg_policies WHERE tablename = 'question_reports';
+
+-- Si no hay política de INSERT, agregar:
+CREATE POLICY "Users can insert reports" ON question_reports
+  FOR INSERT TO authenticated
+  WITH CHECK (true);
+```
+
+**CRÍTICO — Discrepancia en el nombre de campo:**
+- El código en `QuestionRenderer.jsx` y `FlashcardCustomSession.jsx` envía: `reported_by`
+- El schema en `MIGRATION_PLAN.md` define la columna como: `reporter_id`
+- Verificar en Supabase cuál es el nombre real de la columna y ajustar el código si es necesario
+
+### 3. Edge Functions de IA — CRÍTICO (pendiente de sesiones anteriores)
+Sin esto, estas páginas dan error:
 - `Willie.jsx` — tutor IA conversacional
 - `AIGenerate.jsx` — generación de preguntas desde texto
 - `Wellbeing.jsx` — módulo de bienestar con IA
-- `ImportQuestions.jsx` — extracción de preguntas desde PDFs (usa `ExtractDataFromUploadedFile`)
+- `ImportQuestions.jsx` — extracción de preguntas desde PDFs
 
-**Qué hay que hacer:**
-1. Instalar Supabase CLI: `npm install -g supabase`
-2. `supabase login` (en terminal)
-3. `supabase init` (en la raíz del proyecto)
-4. Crear las dos Edge Functions:
-   - `supabase functions new invoke-llm`
-   - `supabase functions new extract-file`
-5. Escribir el código de cada función (ver detalle abajo)
-6. Configurar el secret: `supabase secrets set ANTHROPIC_API_KEY=sk-ant-...`
-7. Deploy: `supabase functions deploy invoke-llm --no-verify-jwt`
-8. Deploy: `supabase functions deploy extract-file --no-verify-jwt`
+**Ver detalles de implementación en `MIGRATION_PLAN.md` sección "Edge Functions".**
 
-**Código de `invoke-llm` (archivo: `supabase/functions/invoke-llm/index.ts`):**
-```typescript
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import Anthropic from 'npm:@anthropic-ai/sdk'
-
-const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') })
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-
-  const { prompt, response_json_schema } = await req.json()
-
-  const systemMsg = response_json_schema
-    ? `Respond ONLY with valid JSON matching this schema: ${JSON.stringify(response_json_schema)}. Return only the JSON, no markdown, no explanation.`
-    : 'You are a helpful assistant.'
-
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    system: systemMsg,
-    messages: [{ role: 'user', content: prompt }],
-  })
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  
-  let result
-  if (response_json_schema) {
-    try {
-      result = JSON.parse(text)
-    } catch {
-      // Try to extract JSON from text
-      const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
-      result = match ? JSON.parse(match[0]) : text
-    }
-  } else {
-    result = text
-  }
-
-  return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-})
-```
-
-**Código de `extract-file` (archivo: `supabase/functions/extract-file/index.ts`):**
-```typescript
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import Anthropic from 'npm:@anthropic-ai/sdk'
-
-const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') })
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-
-  const { file_url, json_schema } = await req.json()
-
-  const fileResponse = await fetch(file_url)
-  const fileBuffer = await fileResponse.arrayBuffer()
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)))
-  const mimeType = fileResponse.headers.get('content-type') || 'application/pdf'
-
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'document',
-          source: { type: 'base64', media_type: mimeType, data: base64 }
-        },
-        {
-          type: 'text',
-          text: `Extract data from this document matching exactly this JSON schema: ${JSON.stringify(json_schema)}. Return only valid JSON, no markdown.`
-        }
-      ]
-    }]
-  })
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
-  const result = match ? JSON.parse(match[0]) : {}
-
-  return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-})
-```
-
-**El usuario necesita:**
-- Una API key de Anthropic (`sk-ant-...`) — conseguirla en [console.anthropic.com](https://console.anthropic.com)
-- Instalar Supabase CLI
-
----
-
-### 2. Google OAuth — OPCIONAL
-El botón de "Continuar con Google" fue ocultado porque Google OAuth requiere configuración externa.
-
-**Para activarlo:**
-1. Ir a [console.cloud.google.com](https://console.cloud.google.com)
-2. Crear proyecto → Habilitar Google Identity API
-3. Credentials → Create OAuth 2.0 Client ID (tipo: Web Application)
-4. Authorized redirect URI: `https://dgyjmpmobaufezzxftbu.supabase.co/auth/v1/callback`
-5. Copiar Client ID y Client Secret
-6. En Supabase → Authentication → Providers → Google → pegar las credenciales
-7. Descomentar los botones de Google en `SignIn.jsx` y `Register.jsx`
-
----
-
-### 3. Realtime — VERIFICAR
-Las suscripciones en tiempo real (`Duel.subscribe`, `Notification.subscribe`, `StudyRoom.subscribe`) requieren que Supabase Replication esté activado para esas tablas.
-
-**Para verificar/activar:**
-- Supabase → Database → Publications → `supabase_realtime` → activar `duels`, `notifications`, `study_rooms`
-
-**Nota:** En la UI actual de Supabase, la sección "Replication" que aparece en el menú es para Read Replicas (feature de pago). La configuración de Realtime para tablas está en **Database → Publications**.
-
----
-
-### 4. Subida de archivos — PROBAR
-El bucket `neurolearn-files` ya existe en Supabase Storage. El adapter ya tiene implementado `UploadFile`. Habría que probar subiendo una imagen en una pregunta o un archivo en la Biblioteca para confirmar que funciona.
+### 4. Google OAuth — OPCIONAL
+El botón de "Continuar con Google" fue ocultado en `SignIn.jsx` y `Register.jsx`. Para activarlo, configurar en Google Cloud Console y Supabase Authentication → Providers → Google.
 
 ---
 
@@ -217,19 +128,23 @@ El bucket `neurolearn-files` ya existe en Supabase Storage. El adapter ya tiene 
 NEUROLEARN/
 ├── src/
 │   ├── api/
-│   │   ├── base44Client.js        ← exporta supabaseAdapter como "base44"
-│   │   ├── supabaseClient.js      ← instancia de Supabase
-│   │   └── supabaseAdapter.js     ← adapter completo (auth + entities + integrations)
+│   │   ├── base44Client.js           ← exporta supabaseAdapter como "base44"
+│   │   ├── supabaseClient.js         ← instancia de Supabase (también usada directamente en StudyRooms)
+│   │   └── supabaseAdapter.js        ← adapter completo (auth + entities + integrations)
 │   ├── lib/
-│   │   └── AuthContext.jsx        ← usa supabase.auth.getSession + onAuthStateChange
-│   ├── pages/                     ← 20 páginas, ninguna fue modificada (excepto SignIn y Register para ocultar Google)
+│   │   └── AuthContext.jsx           ← usa supabase.auth.getSession + onAuthStateChange
+│   ├── pages/
+│   │   ├── StudyRooms.jsx            ← Broadcast + polling 1s para mensajes en tiempo real
+│   │   ├── Reports.jsx               ← lista QuestionReports; solo admin/mentor
+│   │   └── [otras páginas sin cambios]
 │   └── components/
-├── supabase/                      ← TODAVÍA NO EXISTE — crear con "supabase init"
-│   └── functions/                 ← crear invoke-llm y extract-file acá
-├── supabase_schema.sql            ← SQL completo ya ejecutado en Supabase
-├── MIGRATION_PLAN.md              ← plan detallado de migración Base44 → Supabase
-├── CONTEXT_AGENTE.md              ← este archivo
-└── .env.local                     ← contiene VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (NO en git)
+│       └── study/
+│           ├── QuestionRenderer.jsx  ← flag button autocontenido (necesita userId prop)
+│           ├── StudyEngine.jsx       ← pasa userId={profile?.user_id} a QuestionRenderer
+│           └── FlashcardCustomSession.jsx ← flag button propio (renderer separado)
+├── MIGRATION_PLAN.md                 ← plan detallado con SQL de todas las tablas + Edge Functions
+├── CONTEXT_AGENTE.md                 ← este archivo
+└── .env.local                        ← VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (NO en git)
 ```
 
 ---
@@ -246,18 +161,149 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 - `VITE_SUPABASE_URL` ✅
 - `VITE_SUPABASE_ANON_KEY` ✅
 
-**Supabase Edge Functions secrets (pendiente):**
+**Supabase Edge Functions secrets (pendiente para IA):**
 - `ANTHROPIC_API_KEY` — todavía no configurado
+
+---
+
+## Código clave — StudyRooms real-time
+
+El mecanismo dual en `src/pages/StudyRooms.jsx`:
+
+```jsx
+import { supabase } from '@/api/supabaseClient';
+
+// Capa 1: Broadcast (instantáneo)
+const bc = supabase
+  .channel(`chat:${activeRoom}`)
+  .on('broadcast', { event: 'msg' }, ({ payload }) => {
+    if (payload.msg.user_id === profile.user_id) return; // ya se mostró optimísticamente
+    setRoomData(prev => {
+      const already = (prev.messages || []).some(m => m.id === payload.msg.id);
+      if (already) return prev;
+      return { ...prev, messages: [...(prev.messages || []), payload.msg] };
+    });
+  })
+  .subscribe();
+
+// Capa 2: Polling 1s (fallback garantizado)
+const poll = async () => {
+  const { data } = await supabase
+    .from('study_rooms')
+    .select('messages, participants')
+    .eq('id', activeRoom)
+    .single();
+  if (alive && data) {
+    setRoomData(prev => {
+      const dbMsgs = data.messages || [];
+      const dbIds = new Set(dbMsgs.map(m => m.id));
+      const pending = (prev.messages || []).filter(m => !dbIds.has(m.id));
+      const merged = [...dbMsgs, ...pending];
+      const localMsgs = prev.messages || [];
+      if (merged.length === localMsgs.length && merged.every((m, i) => m.id === localMsgs[i]?.id)) return prev;
+      return { ...prev, messages: merged, participants: data.participants || prev.participants };
+    });
+  }
+  if (alive) setTimeout(poll, 1000);
+};
+setTimeout(poll, 1000);
+```
+
+---
+
+## Código clave — Flag button
+
+### En `QuestionRenderer.jsx` (para sesiones con preguntas):
+```jsx
+const [flagged, setFlagged] = useState(false);
+
+const handleFlag = async () => {
+  if (flagged) return;
+  setFlagged(true);
+  toast.success('Reporte enviado ✓', { duration: 2000 });
+  try {
+    await base44.entities.QuestionReport.create({
+      question_id: question.id,
+      reported_by: userId ?? null,  // ← verificar nombre de campo en Supabase
+      reason: 'flagged_in_session',
+      status: 'pending',
+    });
+    await base44.entities.Question.update(question.id, { is_reported: true });
+  } catch (_) {}
+};
+
+// Botón en el header:
+<button onClick={handleFlag} className={flagged ? 'bg-red-500 cursor-default' : 'hover:bg-red-500/10'}>
+  <Flag className={flagged ? 'fill-white text-white' : 'text-muted-foreground hover:text-red-500'} />
+</button>
+```
+
+### En `FlashcardCustomSession.jsx` (para sesiones de flashcards):
+```jsx
+const [flaggedIds, setFlaggedIds] = useState(new Set());
+
+const handleFlag = async (qId) => {
+  if (flaggedIds.has(qId)) return;
+  setFlaggedIds(prev => new Set([...prev, qId]));
+  toast.success('Reporte enviado ✓', { duration: 2000 });
+  try {
+    await base44.entities.QuestionReport.create({
+      question_id: qId,
+      reported_by: profile?.user_id ?? null,
+      reason: 'flagged_in_session',
+      status: 'pending',
+    });
+    await base44.entities.Question.update(qId, { is_reported: true });
+  } catch (_) {}
+};
+
+// Botón (dentro del div de la carta con className="relative"):
+<button
+  onClick={() => handleFlag(currentQ.id)}
+  className={`absolute top-3 right-3 rounded-full p-1.5 ${
+    flaggedIds.has(currentQ.id) ? 'bg-red-500 cursor-default' : 'bg-black/10 hover:bg-red-500'
+  }`}
+>
+  <Flag className={`h-3.5 w-3.5 ${flaggedIds.has(currentQ.id) ? 'fill-white text-white' : 'text-black/40 hover:text-white'}`} />
+</button>
+```
+
+---
+
+## Otras sesiones de estudio — cobertura del flag button
+
+- `ExpressMode.jsx` — usa StudyEngine → QuestionRenderer → ✅ flag incluido
+- `PersonalizedSession.jsx` — usa StudyEngine → QuestionRenderer → ✅ flag incluido
+- `SelectiveSession.jsx` — usa StudyEngine → QuestionRenderer → ✅ flag incluido
+- `DifficultySession.jsx` — usa StudyEngine → QuestionRenderer → ✅ flag incluido
+- `SingleSubjectSession.jsx` — usa StudyEngine → QuestionRenderer → ✅ flag incluido
+- `FlashcardCustomSession.jsx` — renderer propio → ✅ flag implementado directamente
+- **DuelArena.jsx** — ⚠️ verificar si usa QuestionRenderer o tiene renderer propio; si es propio, hay que agregar flag
+
+---
+
+## Supabase — configuración relevante
+
+- **Proyecto ID:** `dgyjmpmobaufezzxftbu`
+- **Región:** São Paulo
+- **URL:** `https://dgyjmpmobaufezzxftbu.supabase.co`
+- **`study_rooms`:** tiene `REPLICA IDENTITY FULL` activado y está en la publicación `supabase_realtime`
+- **RLS:** habilitado en todas las tablas
+- **Bucket Storage:** `neurolearn-files` (público)
+- **"Confirm email":** desactivado (free tier limita a 2 emails/hora)
 
 ---
 
 ## Orden de prioridad para el próximo agente
 
-1. **Crear las Edge Functions de IA** (invoke-llm + extract-file) — desbloquea Willie, AIGenerate, Wellbeing e ImportQuestions
-2. **Verificar Realtime** en Database → Publications para duelos, notificaciones y salas de estudio
-3. **Probar upload de archivos** en Library o CreateQuestionModal
-4. **Google OAuth** (opcional, según necesidad del usuario)
+1. **Verificar deploy en Vercel** — confirmar que commit `964a67d` esté en Production
+2. **Verificar nombre de columna** `reported_by` vs `reporter_id` en tabla `question_reports` de Supabase
+3. **Si flag falla silenciosamente** — revisar RLS en `question_reports` (ver sección de pendientes arriba)
+4. **Probar StudyRooms** en dos dispositivos — mensajes deben aparecer sin recargar
+5. **Verificar DuelArena** — si tiene renderer propio para preguntas, agregar flag button
+6. **Implementar Edge Functions de IA** — ver `MIGRATION_PLAN.md` para el código completo
 
 ---
 
-*Generado el 2026-06-28. Conversación original con Claude Sonnet 4.6 en Claude Code (VS Code Extension).*
+*Generado el 2026-07-01. Conversación con Claude Sonnet 4.6 en Claude Code (VS Code Extension).*
+*Para continuar en otro computador: clonar el repo desde GitHub, crear `.env.local` con las variables de arriba, ejecutar `npm install` y `npm run dev`.*
