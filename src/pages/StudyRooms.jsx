@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,13 @@ const isParticipantActive = (p) => {
   return Date.now() - new Date(p.last_active).getTime() < ONLINE_THRESHOLD_MS;
 };
 
+// Merge DB messages with local optimistic messages (avoid duplicates)
+const mergeMessages = (dbMsgs, localMsgs) => {
+  const dbIds = new Set((dbMsgs || []).map(m => m.id));
+  const pending = (localMsgs || []).filter(m => !dbIds.has(m.id));
+  return [...(dbMsgs || []), ...pending];
+};
+
 export default function StudyRooms() {
   const { profile, user } = useOutletContext();
   const isAdminOrMentor = user?.role === 'admin' || user?.role === 'mentor';
@@ -28,89 +36,99 @@ export default function StudyRooms() {
   const [showCreate, setShowCreate] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', subject: 'General', description: '' });
   const messagesEndRef = useRef();
-  // Track which message IDs we've added optimistically so postgres_changes merge works
-  const activeRoomRef = useRef(null);
+  const realtimeRef = useRef(null);   // direct Supabase channel for this room
+  const pollRef = useRef(null);       // polling timer
 
-  useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
-
-  // Subscribe to ALL study_rooms postgres_changes
-  useEffect(() => {
-    loadRooms();
-    const unsub = base44.entities.StudyRoom.subscribe((event) => {
-      // Always refresh room list
-      loadRooms();
-
-      const currentRoom = activeRoomRef.current;
-      if (!currentRoom || event.data?.id !== currentRoom) return;
-
-      // Update messages: merge DB state with any local-only optimistic messages
-      if (Array.isArray(event.data?.messages)) {
-        setRoomData(prev => {
-          if (!prev) return prev;
-          const dbMsgs = event.data.messages;
-          const localMsgs = prev.messages || [];
-          const dbIds = new Set(dbMsgs.map(m => m.id));
-          // Keep optimistic messages not yet confirmed by DB
-          const pending = localMsgs.filter(m => !dbIds.has(m.id));
-          return { ...prev, messages: [...dbMsgs, ...pending] };
-        });
-      }
-
-      // Update participants
-      if (Array.isArray(event.data?.participants)) {
-        setRoomData(prev => prev ? { ...prev, participants: event.data.participants } : prev);
-      }
-    });
-    return unsub;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [roomData?.messages]);
-
-  // Poll every 2s when inside a room — guaranteed message delivery across devices
+  // ── Realtime + polling for active room ──────────────────────────────
   useEffect(() => {
     if (!activeRoom) return;
-    const poll = setInterval(async () => {
-      const fresh = await base44.entities.StudyRoom.get(activeRoom);
-      if (!fresh) return;
-      setRoomData(prev => {
-        if (!prev) return prev;
-        const dbMsgs = fresh.messages || [];
-        const localMsgs = prev.messages || [];
-        const dbIds = new Set(dbMsgs.map(m => m.id));
-        // Keep optimistic messages not yet in DB
-        const pending = localMsgs.filter(m => !dbIds.has(m.id));
-        return {
-          ...prev,
-          messages: [...dbMsgs, ...pending],
-          participants: fresh.participants || prev.participants,
-        };
-      });
-    }, 1500);
-    return () => clearInterval(poll);
-  }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Heartbeat: keep last_active fresh every 30s
+    // 1. Direct Supabase Realtime: instant updates via postgres_changes
+    const channel = supabase
+      .channel(`study_rooms:${activeRoom}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'study_rooms', filter: `id=eq.${activeRoom}` },
+        (payload) => {
+          const row = payload.new;
+          if (!row) return;
+          setRoomData(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              messages: mergeMessages(row.messages, prev.messages),
+              participants: Array.isArray(row.participants) ? row.participants : prev.participants,
+            };
+          });
+        },
+      )
+      .subscribe();
+
+    realtimeRef.current = channel;
+
+    // 2. Polling fallback: fetch every 2s in case Realtime misses something
+    const doPoll = async () => {
+      try {
+        const fresh = await base44.entities.StudyRoom.get(activeRoom);
+        if (fresh) {
+          setRoomData(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              messages: mergeMessages(fresh.messages, prev.messages),
+              participants: Array.isArray(fresh.participants) ? fresh.participants : prev.participants,
+            };
+          });
+        }
+      } catch (_) { /* ignore */ }
+      pollRef.current = setTimeout(doPoll, 2000);
+    };
+    pollRef.current = setTimeout(doPoll, 2000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      realtimeRef.current = null;
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    };
+  }, [activeRoom]);
+
+  // ── Room list subscription ──────────────────────────────────────────
+  useEffect(() => {
+    loadRooms();
+    const unsub = base44.entities.StudyRoom.subscribe(() => loadRooms());
+    return unsub;
+  }, []);
+
+  // ── Auto-scroll ─────────────────────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [roomData?.messages?.length]);
+
+  // ── Heartbeat (every 30s) ───────────────────────────────────────────
   useEffect(() => {
     if (!activeRoom) return;
     const beat = setInterval(async () => {
-      const fresh = await base44.entities.StudyRoom.get(activeRoom);
-      if (!fresh) return;
-      const participants = (fresh.participants || [])
-        .filter(p => p.user_id === profile.user_id || isParticipantActive(p))
-        .map(p => p.user_id === profile.user_id
-          ? { ...p, last_active: new Date().toISOString() }
-          : p,
-        );
-      await base44.entities.StudyRoom.update(activeRoom, { participants });
+      try {
+        const fresh = await base44.entities.StudyRoom.get(activeRoom);
+        if (!fresh) return;
+        const participants = (fresh.participants || [])
+          .filter(p => p.user_id === profile.user_id || isParticipantActive(p))
+          .map(p => p.user_id === profile.user_id
+            ? { ...p, last_active: new Date().toISOString() }
+            : p,
+          );
+        await base44.entities.StudyRoom.update(activeRoom, { participants });
+      } catch (_) { /* ignore */ }
     }, 30_000);
     return () => clearInterval(beat);
   }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadRooms = async () => {
-    const r = await base44.entities.StudyRoom.filter({ is_active: true });
-    setRooms(r);
+    try {
+      const r = await base44.entities.StudyRoom.filter({ is_active: true });
+      setRooms(r || []);
+    } catch (_) { /* ignore */ }
   };
 
   const joinRoom = async (room) => {
@@ -130,31 +148,30 @@ export default function StudyRooms() {
     setRoomData({ ...room, participants: freshParticipants });
   };
 
-  const leaveRoom = async () => {
+  const leaveRoom = useCallback(async () => {
     if (!roomData) return;
     const participants = (roomData.participants || []).filter(p => p.user_id !== profile.user_id);
     await base44.entities.StudyRoom.update(roomData.id, { participants });
     setActiveRoom(null);
     setRoomData(null);
-  };
+  }, [roomData, profile.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = async () => {
     if (!message.trim() || !roomData) return;
+    const text = message;
+    setMessage('');
     const newMsg = {
       id: `${Date.now()}-${profile.user_id}`,
       user_id: profile.user_id,
       user_name: profile.display_name,
       avatar_emoji: profile.avatar_emoji,
-      text: message,
+      text,
       created_at: new Date().toISOString(),
     };
     const messages = [...(roomData.messages || []), newMsg];
-
-    // Show to self immediately (optimistic)
+    // Optimistic update (sender sees immediately)
     setRoomData(prev => ({ ...prev, messages }));
-    setMessage('');
-
-    // Save to DB — postgres_changes will deliver to all other connected users
+    // Persist to DB (triggers Realtime for other users)
     await base44.entities.StudyRoom.update(roomData.id, { messages });
   };
 
@@ -180,6 +197,7 @@ export default function StudyRooms() {
     loadRooms();
   };
 
+  // ── Chat view ───────────────────────────────────────────────────────
   if (activeRoom && roomData) {
     const activeParticipants = (roomData.participants || []).filter(isParticipantActive);
     return (
@@ -204,7 +222,6 @@ export default function StudyRooms() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
-          {/* Participants */}
           <div className="lg:col-span-1 bg-card border border-border rounded-xl p-3">
             <p className="text-xs font-semibold text-muted-foreground mb-2">EN LÍNEA ({activeParticipants.length})</p>
             <div className="space-y-2">
@@ -220,7 +237,6 @@ export default function StudyRooms() {
             </div>
           </div>
 
-          {/* Chat */}
           <div className="lg:col-span-3 bg-card border border-border rounded-xl flex flex-col">
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {(roomData.messages || []).length === 0 && (
@@ -231,7 +247,7 @@ export default function StudyRooms() {
               {(roomData.messages || []).map(msg => (
                 <div key={msg.id} className={`flex gap-2 ${msg.user_id === profile.user_id ? 'flex-row-reverse' : ''}`}>
                   <span className="text-xl shrink-0">{msg.avatar_emoji || '👤'}</span>
-                  <div className={`max-w-[70%] ${msg.user_id === profile.user_id ? 'items-end' : 'items-start'} flex flex-col`}>
+                  <div className={`max-w-[70%] flex flex-col ${msg.user_id === profile.user_id ? 'items-end' : 'items-start'}`}>
                     <p className="text-xs text-muted-foreground mb-1">{msg.user_name}</p>
                     <div className={`px-3 py-2 rounded-xl text-sm ${msg.user_id === profile.user_id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                       {msg.text}
@@ -260,6 +276,7 @@ export default function StudyRooms() {
     );
   }
 
+  // ── Room list ───────────────────────────────────────────────────────
   return (
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
