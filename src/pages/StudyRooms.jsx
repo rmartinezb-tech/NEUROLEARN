@@ -87,7 +87,7 @@ export default function StudyRooms() {
           participants: fresh.participants || prev.participants,
         };
       });
-    }, 2000);
+    }, 1500);
     return () => clearInterval(poll);
   }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
