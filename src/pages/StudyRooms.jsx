@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { supabase } from '@/api/supabaseClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,20 +28,41 @@ export default function StudyRooms() {
   const [showCreate, setShowCreate] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', subject: 'General', description: '' });
   const messagesEndRef = useRef();
-  const broadcastRef = useRef(null); // Supabase Broadcast channel for instant messages
+  // Track which message IDs we've added optimistically so postgres_changes merge works
+  const activeRoomRef = useRef(null);
 
-  // Load room list + subscribe to room list changes (create/delete/participant updates)
+  useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
+
+  // Subscribe to ALL study_rooms postgres_changes
   useEffect(() => {
     loadRooms();
     const unsub = base44.entities.StudyRoom.subscribe((event) => {
+      // Always refresh room list
       loadRooms();
-      // Update participants from Postgres Changes (messages handled by Broadcast)
-      if (activeRoom && event.data?.id === activeRoom && event.data?.participants) {
+
+      const currentRoom = activeRoomRef.current;
+      if (!currentRoom || event.data?.id !== currentRoom) return;
+
+      // Update messages: merge DB state with any local-only optimistic messages
+      if (Array.isArray(event.data?.messages)) {
+        setRoomData(prev => {
+          if (!prev) return prev;
+          const dbMsgs = event.data.messages;
+          const localMsgs = prev.messages || [];
+          const dbIds = new Set(dbMsgs.map(m => m.id));
+          // Keep optimistic messages not yet confirmed by DB
+          const pending = localMsgs.filter(m => !dbIds.has(m.id));
+          return { ...prev, messages: [...dbMsgs, ...pending] };
+        });
+      }
+
+      // Update participants
+      if (Array.isArray(event.data?.participants)) {
         setRoomData(prev => prev ? { ...prev, participants: event.data.participants } : prev);
       }
     });
     return unsub;
-  }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,12 +91,6 @@ export default function StudyRooms() {
   };
 
   const joinRoom = async (room) => {
-    // Clean up any previous broadcast channel
-    if (broadcastRef.current) {
-      supabase.removeChannel(broadcastRef.current);
-      broadcastRef.current = null;
-    }
-
     const freshParticipants = (room.participants || [])
       .filter(p => p.user_id !== profile.user_id)
       .filter(isParticipantActive);
@@ -89,34 +103,12 @@ export default function StudyRooms() {
       current_activity: 'Estudiando',
     });
     await base44.entities.StudyRoom.update(room.id, { participants: freshParticipants });
-
-    // Set up Broadcast channel for instant messages
-    const channel = supabase
-      .channel(`room:${room.id}`)
-      .on('broadcast', { event: 'message' }, ({ payload }) => {
-        // Ignore own messages (already added optimistically)
-        if (payload.msg?.user_id === profile.user_id) return;
-        setRoomData(prev => {
-          if (!prev) return prev;
-          const exists = (prev.messages || []).some(m => m.id === payload.msg.id);
-          if (exists) return prev;
-          return { ...prev, messages: [...(prev.messages || []), payload.msg] };
-        });
-      })
-      .subscribe();
-
-    broadcastRef.current = channel;
     setActiveRoom(room.id);
     setRoomData({ ...room, participants: freshParticipants });
   };
 
   const leaveRoom = async () => {
     if (!roomData) return;
-    // Clean up broadcast channel
-    if (broadcastRef.current) {
-      supabase.removeChannel(broadcastRef.current);
-      broadcastRef.current = null;
-    }
     const participants = (roomData.participants || []).filter(p => p.user_id !== profile.user_id);
     await base44.entities.StudyRoom.update(roomData.id, { participants });
     setActiveRoom(null);
@@ -126,7 +118,7 @@ export default function StudyRooms() {
   const sendMessage = async () => {
     if (!message.trim() || !roomData) return;
     const newMsg = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${profile.user_id}`,
       user_id: profile.user_id,
       user_name: profile.display_name,
       avatar_emoji: profile.avatar_emoji,
@@ -135,20 +127,11 @@ export default function StudyRooms() {
     };
     const messages = [...(roomData.messages || []), newMsg];
 
-    // 1. Show to self immediately (optimistic)
+    // Show to self immediately (optimistic)
     setRoomData(prev => ({ ...prev, messages }));
     setMessage('');
 
-    // 2. Broadcast to all others in the room (instant, no latency)
-    if (broadcastRef.current) {
-      broadcastRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: { msg: newMsg },
-      });
-    }
-
-    // 3. Persist to DB
+    // Save to DB — postgres_changes will deliver to all other connected users
     await base44.entities.StudyRoom.update(roomData.id, { messages });
   };
 
