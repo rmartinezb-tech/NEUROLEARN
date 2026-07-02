@@ -68,6 +68,29 @@ export default function StudyRooms() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [roomData?.messages]);
 
+  // Poll every 2s when inside a room — guaranteed message delivery across devices
+  useEffect(() => {
+    if (!activeRoom) return;
+    const poll = setInterval(async () => {
+      const fresh = await base44.entities.StudyRoom.get(activeRoom);
+      if (!fresh) return;
+      setRoomData(prev => {
+        if (!prev) return prev;
+        const dbMsgs = fresh.messages || [];
+        const localMsgs = prev.messages || [];
+        const dbIds = new Set(dbMsgs.map(m => m.id));
+        // Keep optimistic messages not yet in DB
+        const pending = localMsgs.filter(m => !dbIds.has(m.id));
+        return {
+          ...prev,
+          messages: [...dbMsgs, ...pending],
+          participants: fresh.participants || prev.participants,
+        };
+      });
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Heartbeat: keep last_active fresh every 30s
   useEffect(() => {
     if (!activeRoom) return;
