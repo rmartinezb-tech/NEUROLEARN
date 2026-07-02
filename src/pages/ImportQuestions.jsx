@@ -398,7 +398,7 @@ NOTAS IMPORTANTES
   return (
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-space font-bold">📥 Importación Masiva</h1>
+        <h1 className="text-2xl font-space font-bold flex items-center gap-2"><span>📥</span> Importación Masiva</h1>
         <div className="flex gap-2">
           <AIDisclaimerButton />
           <a
@@ -408,7 +408,7 @@ NOTAS IMPORTANTES
             rel="noopener noreferrer"
           >
             <Button variant="outline" className="gap-2 rounded-xl bg-primary/10 border-primary/30 hover:bg-primary/20 text-primary">
-              <Download className="h-4 w-4" /> Descargar Generador
+              <Download className="h-4 w-4" /> Descargar Skill
             </Button>
           </a>
           <Button variant="outline" onClick={downloadInstructions} className="gap-2 rounded-xl">
