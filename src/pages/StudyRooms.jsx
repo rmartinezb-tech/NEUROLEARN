@@ -19,13 +19,6 @@ const isParticipantActive = (p) => {
   return Date.now() - new Date(p.last_active).getTime() < ONLINE_THRESHOLD_MS;
 };
 
-// Merge DB messages with local optimistic messages (avoid duplicates)
-const mergeMessages = (dbMsgs, localMsgs) => {
-  const dbIds = new Set((dbMsgs || []).map(m => m.id));
-  const pending = (localMsgs || []).filter(m => !dbIds.has(m.id));
-  return [...(dbMsgs || []), ...pending];
-};
-
 export default function StudyRooms() {
   const { profile, user } = useOutletContext();
   const isAdminOrMentor = user?.role === 'admin' || user?.role === 'mentor';
@@ -36,76 +29,81 @@ export default function StudyRooms() {
   const [showCreate, setShowCreate] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', subject: 'General', description: '' });
   const messagesEndRef = useRef();
-  const realtimeRef = useRef(null);   // direct Supabase channel for this room
-  const pollRef = useRef(null);       // polling timer
+  const bcRef = useRef(null); // Broadcast channel for instant delivery
 
-  // ── Realtime + polling for active room ──────────────────────────────
+  // Auto-scroll when new messages arrive
   useEffect(() => {
-    if (!activeRoom) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [roomData?.messages?.length]);
 
-    // 1. Direct Supabase Realtime: instant updates via postgres_changes
-    const channel = supabase
-      .channel(`study_rooms:${activeRoom}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'study_rooms', filter: `id=eq.${activeRoom}` },
-        (payload) => {
-          const row = payload.new;
-          if (!row) return;
-          setRoomData(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              messages: mergeMessages(row.messages, prev.messages),
-              participants: Array.isArray(row.participants) ? row.participants : prev.participants,
-            };
-          });
-        },
-      )
-      .subscribe();
-
-    realtimeRef.current = channel;
-
-    // 2. Polling fallback: fetch every 2s in case Realtime misses something
-    const doPoll = async () => {
-      try {
-        const fresh = await base44.entities.StudyRoom.get(activeRoom);
-        if (fresh) {
-          setRoomData(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              messages: mergeMessages(fresh.messages, prev.messages),
-              participants: Array.isArray(fresh.participants) ? fresh.participants : prev.participants,
-            };
-          });
-        }
-      } catch (_) { /* ignore */ }
-      pollRef.current = setTimeout(doPoll, 2000);
-    };
-    pollRef.current = setTimeout(doPoll, 2000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      realtimeRef.current = null;
-      clearTimeout(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [activeRoom]);
-
-  // ── Room list subscription ──────────────────────────────────────────
+  // Room list: load once and subscribe to changes
   useEffect(() => {
     loadRooms();
     const unsub = base44.entities.StudyRoom.subscribe(() => loadRooms());
     return unsub;
   }, []);
 
-  // ── Auto-scroll ─────────────────────────────────────────────────────
+  // When inside a room: poll DB every 1s AND use Broadcast for instant delivery
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [roomData?.messages?.length]);
+    if (!activeRoom) return;
+    let alive = true;
 
-  // ── Heartbeat (every 30s) ───────────────────────────────────────────
+    // ── 1. Broadcast channel (instant delivery, <100ms) ────────────────
+    const bc = supabase
+      .channel(`chat:${activeRoom}`)
+      .on('broadcast', { event: 'msg' }, ({ payload }) => {
+        if (!alive || !payload?.msg) return;
+        if (payload.msg.user_id === profile.user_id) return; // already shown optimistically
+        setRoomData(prev => {
+          if (!prev) return prev;
+          const already = (prev.messages || []).some(m => m.id === payload.msg.id);
+          if (already) return prev;
+          return { ...prev, messages: [...(prev.messages || []), payload.msg] };
+        });
+      })
+      .subscribe();
+    bcRef.current = bc;
+
+    // ── 2. Polling (1s fallback — guaranteed even without Realtime) ────
+    const poll = async () => {
+      if (!alive) return;
+      try {
+        const { data } = await supabase
+          .from('study_rooms')
+          .select('messages, participants')
+          .eq('id', activeRoom)
+          .single();
+        if (alive && data) {
+          setRoomData(prev => {
+            if (!prev) return prev;
+            const dbMsgs = Array.isArray(data.messages) ? data.messages : [];
+            const localMsgs = prev.messages || [];
+            const dbIds = new Set(dbMsgs.map(m => m.id));
+            // Keep optimistic messages not yet confirmed by DB
+            const pending = localMsgs.filter(m => !dbIds.has(m.id));
+            const merged = [...dbMsgs, ...pending];
+            // Skip re-render if nothing changed
+            if (merged.length === localMsgs.length && merged.every((m, i) => m.id === localMsgs[i]?.id)) return prev;
+            return {
+              ...prev,
+              messages: merged,
+              participants: Array.isArray(data.participants) ? data.participants : prev.participants,
+            };
+          });
+        }
+      } catch (_) { /* network error — retry next tick */ }
+      if (alive) setTimeout(poll, 1000);
+    };
+    setTimeout(poll, 1000);
+
+    return () => {
+      alive = false;
+      supabase.removeChannel(bc);
+      bcRef.current = null;
+    };
+  }, [activeRoom, profile.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Heartbeat: keep last_active fresh every 30s
   useEffect(() => {
     if (!activeRoom) return;
     const beat = setInterval(async () => {
@@ -114,12 +112,9 @@ export default function StudyRooms() {
         if (!fresh) return;
         const participants = (fresh.participants || [])
           .filter(p => p.user_id === profile.user_id || isParticipantActive(p))
-          .map(p => p.user_id === profile.user_id
-            ? { ...p, last_active: new Date().toISOString() }
-            : p,
-          );
+          .map(p => p.user_id === profile.user_id ? { ...p, last_active: new Date().toISOString() } : p);
         await base44.entities.StudyRoom.update(activeRoom, { participants });
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }, 30_000);
     return () => clearInterval(beat);
   }, [activeRoom]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -128,7 +123,7 @@ export default function StudyRooms() {
     try {
       const r = await base44.entities.StudyRoom.filter({ is_active: true });
       setRooms(r || []);
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   };
 
   const joinRoom = async (room) => {
@@ -169,9 +164,16 @@ export default function StudyRooms() {
       created_at: new Date().toISOString(),
     };
     const messages = [...(roomData.messages || []), newMsg];
-    // Optimistic update (sender sees immediately)
+
+    // 1. Show to self immediately
     setRoomData(prev => ({ ...prev, messages }));
-    // Persist to DB (triggers Realtime for other users)
+
+    // 2. Broadcast to others instantly (no DB round-trip)
+    if (bcRef.current) {
+      bcRef.current.send({ type: 'broadcast', event: 'msg', payload: { msg: newMsg } });
+    }
+
+    // 3. Persist to DB (polling will pick this up for anyone who missed Broadcast)
     await base44.entities.StudyRoom.update(roomData.id, { messages });
   };
 
