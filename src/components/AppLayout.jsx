@@ -61,16 +61,23 @@ export default function AppLayout() {
     loadSavedTheme();
     async function load() {
       const me = await base44.auth.me();
-      setUser(me);
       const profiles = await base44.entities.UserProfile.filter({ user_id: me.id });
       if (profiles.length > 0) {
-        if (!profiles[0].onboarding_complete) {
+        const p = profiles[0];
+        if (!p.onboarding_complete) {
           navigate('/onboarding');
           return;
         }
-        setProfile(profiles[0]);
-        if (profiles[0].theme) applyTheme(profiles[0].theme);
-        base44.entities.UserProfile.update(profiles[0].id, { is_online: true, last_active: new Date().toISOString() });
+        // Sync email to profile on every login; also update online status
+        const updates = { is_online: true, last_active: new Date().toISOString() };
+        if (me.email && !p.email) updates.email = me.email;
+        base44.entities.UserProfile.update(p.id, updates);
+
+        // Role in profile takes precedence (mentor grants); fall back to auth metadata (admin)
+        const effectiveRole = (p.role === 'admin' || p.role === 'mentor') ? p.role : (me.role ?? 'user');
+        setUser({ ...me, role: effectiveRole });
+        setProfile({ ...p, email: p.email || me.email });
+        if (p.theme) applyTheme(p.theme);
       } else {
         navigate('/onboarding');
       }
